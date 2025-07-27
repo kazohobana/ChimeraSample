@@ -2,7 +2,10 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Shield, UploadCloud, Cpu, Wifi, Bot, AlertTriangle, CheckCircle, BarChart, FileImage, FileVideo, X, Loader2, Sparkles, History, BookLock, Info, PlusCircle, Trash2, MessageSquare, Send, User, Link2, ThumbsUp, ThumbsDown, FileSignature, Newspaper, Edit, BookOpen, Check } from 'lucide-react';
 
 // --- Firebase Imports ---
-// Mocking Firebase for a self-contained component. In a real app, you would use the actual Firebase SDK.
+// This check prevents the build from failing in a non-browser environment.
+const isBrowser = typeof window !== 'undefined';
+
+// Mocking Firebase for a self-contained component or if the SDK fails to load.
 let mockDb = {};
 const mockFirebase = {
     initializeApp: () => ({}), getAuth: () => ({}), signInAnonymously: () => Promise.resolve({ user: { uid: 'mockUser' } }), getFirestore: () => ({}),
@@ -42,9 +45,9 @@ const mockFirebase = {
     serverTimestamp: () => new Date(),
 };
 
-const firebase = window.firebase || mockFirebase;
-const { initializeApp, getAuth, signInAnonymously } = firebase;
-const { getFirestore, collection, addDoc, doc, updateDoc, query, onSnapshot, orderBy, serverTimestamp } = firebase.firestore || mockFirebase;
+const firebase = isBrowser ? window.firebase : null;
+const { initializeApp, getAuth, signInAnonymously } = firebase || mockFirebase;
+const { getFirestore, collection, addDoc, doc, updateDoc, query, onSnapshot, orderBy, serverTimestamp } = (firebase && firebase.firestore) ? firebase.firestore : mockFirebase;
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
@@ -115,7 +118,7 @@ const Sidebar = ({ activeView, setActiveView }) => (
       <NavItem icon={BookLock} label="Community Vault" view="vault" activeView={activeView} onClick={() => setActiveView('vault')} />
       <NavItem icon={Info} label="About the Project" view="about" activeView={activeView} onClick={() => setActiveView('about')} />
     </ul>
-    <div className="mt-auto text-center text-xs text-gray-500"><p>Version 1.7.0</p><p>Resilient. Secure. Open.</p></div>
+    <div className="mt-auto text-center text-xs text-gray-500"><p>Version 1.7.1</p><p>Resilient. Secure. Open.</p></div>
   </nav>
 );
 
@@ -345,6 +348,63 @@ const FactChecker = () => {
 };
 
 // --- Journalist Portal Components ---
+const VotingInterface = ({ applications, onVote, journalistId }) => {
+    const [denialReason, setDenialReason] = useState('');
+    const [denyingAppId, setDenyingAppId] = useState(null);
+    const pendingApps = applications.filter(app => app.status === 'pending');
+
+    const handleDenyClick = (appId) => {
+        setDenyingAppId(appId);
+    };
+
+    const submitDenial = () => {
+        if (!denialReason) {
+            alert("Please provide a reason for denial.");
+            return;
+        }
+        onVote(denyingAppId, journalistId, false, denialReason);
+        setDenyingAppId(null);
+        setDenialReason('');
+    };
+
+    return (<><div className="flex flex-col h-full">
+        <h3 className="text-xl font-semibold text-amber-300 mb-4 p-3 border-b border-gray-700/50">Community Voting</h3>
+        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            {pendingApps.length === 0 && <p className="text-gray-500">No pending applications.</p>}
+            {pendingApps.map(app => (
+                <div key={app.id} className="bg-gray-900/70 p-4 rounded-lg">
+                    <h4 className="font-bold text-white">{app.name}</h4><p className="text-sm text-gray-400">{app.affiliation}</p>
+                    <p className="text-sm my-2 p-3 bg-gray-800 rounded">{app.reason}</p>
+                    <div className="flex items-center justify-between mt-2">
+                        <div className="text-sm font-bold text-cyan-400">{app.approvals || 0} / 10 Approvals</div>
+                        {app.votedBy && app.votedBy.includes(journalistId) ? (<p className="text-sm text-green-400">You have voted.</p>) : (
+                            <div className="flex gap-2">
+                                <button onClick={() => handleDenyClick(app.id)} className="flex items-center gap-1 bg-red-500/20 text-red-300 px-3 py-1 rounded-md hover:bg-red-500/40"><ThumbsDown size={16}/> Deny</button>
+                                <button onClick={() => onVote(app.id, journalistId, true)} className="flex items-center gap-1 bg-green-500/20 text-green-300 px-3 py-1 rounded-md hover:bg-green-500/40"><ThumbsUp size={16}/> Approve</button>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            ))}
+        </div>
+    </div>
+    {denyingAppId && <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center" onClick={() => setDenyingAppId(null)}>
+        <div className="bg-gray-800 rounded-2xl border border-gray-700 p-8 max-w-md w-full" onClick={e => e.stopPropagation()}>
+            <h3 className="text-xl font-bold text-white mb-2">Reason for Denial</h3>
+            <p className="text-gray-400 mb-4">Please provide a brief, non-public reason for denying this application.</p>
+            <select value={denialReason} onChange={e => setDenialReason(e.target.value)} className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-3 mb-4 focus:outline-none focus:ring-2 focus:ring-red-500">
+                <option value="">Select a reason...</option>
+                <option value="Incomplete or suspicious application">Incomplete or suspicious application</option>
+                <option value="Applicant does not appear to be a journalist">Applicant does not appear to be a journalist</option>
+                <option value="Security concern">Security concern</option>
+                <option value="Other">Other</option>
+            </select>
+            <div className="flex gap-4"><button onClick={() => setDenyingAppId(null)} className="w-full bg-gray-600 text-white py-2 rounded-lg font-semibold hover:bg-gray-500">Cancel</button><button onClick={submitDenial} className="w-full bg-red-600 text-white py-2 rounded-lg font-semibold hover:bg-red-500">Submit Denial</button></div>
+        </div>
+    </div>}
+    </>);
+};
+
 const JournalistPortal = () => {
     const [journalistId, setJournalistId] = useState(localStorage.getItem('chimeraJournalistId'));
     const [applications, setApplications] = useState([]);
