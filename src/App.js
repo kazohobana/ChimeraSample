@@ -1,6 +1,22 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Shield, UploadCloud, Cpu, Wifi, Bot, AlertTriangle, CheckCircle, BarChart, FileImage, FileVideo, X, Loader2, Sparkles, History, BookLock, Info, PlusCircle, Trash2, MessageSquare, Send, User, Link2, ThumbsUp, ThumbsDown, FileSignature, Newspaper, Edit, BookOpen, Check } from 'lucide-react';
 
+// --- Firebase Imports ---
+import { initializeApp } from 'firebase/app';
+import { getAuth, signInAnonymously } from 'firebase/auth';
+import { getFirestore, collection, addDoc, doc, updateDoc, query, onSnapshot, orderBy, serverTimestamp } from 'firebase/firestore';
+
+// Your web app's Firebase configuration
+const firebaseConfig = {
+  apiKey: "AIzaSyDYhlbMuwSQ4-LOw9Su3xcVq5dOgBWYNaM",
+  authDomain: "chimera-test-acd1f.firebaseapp.com",
+  projectId: "chimera-test-acd1f",
+  storageBucket: "chimera-test-acd1f.appspot.com",
+  messagingSenderId: "730080953747",
+  appId: "1:730080953747:web:30246a579ce64a5cae9466",
+  measurementId: "G-4JYKE1BHYP"
+};
+
 // --- Error Boundary Component ---
 class ErrorBoundary extends React.Component {
     constructor(props) {
@@ -28,7 +44,25 @@ const fileToBase64 = (file) => new Promise((resolve, reject) => {
 // --- Main Application Component ---
 export default function App() {
   const [activeView, setActiveView] = useState('checker');
-  
+  const [db, setDb] = useState(null);
+
+  useEffect(() => {
+    if (firebaseConfig.apiKey && firebaseConfig.projectId) {
+        try {
+            const app = initializeApp(firebaseConfig);
+            const auth = getAuth(app);
+            signInAnonymously(auth).then(() => { 
+                setDb(getFirestore(app)); 
+                console.log("Firebase Initialized Successfully");
+            }).catch(error => console.error("Firebase sign-in failed", error));
+        } catch (e) { 
+            console.error("Firebase init failed.", e); 
+        }
+    } else {
+        console.warn("Firebase configuration is missing.");
+    }
+  }, []);
+
   return (
     <div className="bg-gray-900 text-gray-200 font-sans min-h-screen flex w-full h-screen">
       <Sidebar activeView={activeView} setActiveView={setActiveView} />
@@ -37,9 +71,9 @@ export default function App() {
         <main className="flex-grow p-4 md:p-8 flex items-center justify-center overflow-y-auto">
           <ErrorBoundary key={activeView}>
             {activeView === 'checker' && <FactChecker />}
-            {activeView === 'news' && <CommunityNews />}
+            {activeView === 'news' && <CommunityNews db={db} />}
             {activeView === 'vault' && <CommunityVault />}
-            {activeView === 'portal' && <JournalistPortal />}
+            {activeView === 'portal' && <JournalistPortal db={db} />}
             {activeView === 'about' && <AboutProject />}
           </ErrorBoundary>
         </main>
@@ -59,7 +93,7 @@ const Sidebar = ({ activeView, setActiveView }) => (
       <NavItem icon={BookLock} label="Community Vault" view="vault" activeView={activeView} onClick={() => setActiveView('vault')} />
       <NavItem icon={Info} label="About the Project" view="about" activeView={activeView} onClick={() => setActiveView('about')} />
     </ul>
-    <div className="mt-auto text-center text-xs text-gray-500"><p>Version 1.8.0 (Vercel Native)</p><p>Resilient. Secure. Open.</p></div>
+    <div className="mt-auto text-center text-xs text-gray-500"><p>Version 1.8.0</p><p>Resilient. Secure. Open.</p></div>
   </nav>
 );
 
@@ -76,26 +110,35 @@ const Header = () => {
 
 // --- Feature Components ---
 
-const CommunityNews = () => {
+const CommunityNews = ({ db }) => {
     const [articles, setArticles] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
     useEffect(() => {
-        const fetchArticles = async () => {
-            try {
-                const response = await fetch('/api/articles');
-                if (!response.ok) throw new Error('Failed to fetch articles');
-                const data = await response.json();
-                setArticles(data.filter(a => a.status === 'published'));
-            } catch (err) {
-                setError(err.message);
-            } finally {
-                setLoading(false);
-            }
-        };
-        fetchArticles();
-    }, []);
+        if (!db) {
+            setLoading(true); // Wait for db prop
+            return;
+        }
+        setLoading(true);
+        const q = query(collection(db, "articles"), orderBy("timestamp", "desc"));
+        const unsubscribe = onSnapshot(q, snapshot => {
+            const publishedArticles = [];
+            snapshot.forEach(doc => {
+                const data = doc.data();
+                if (data.status === 'published') {
+                    publishedArticles.push({ ...data, id: doc.id });
+                }
+            });
+            setArticles(publishedArticles);
+            setLoading(false);
+        }, err => {
+            console.error(err);
+            setError("Failed to fetch community articles.");
+            setLoading(false);
+        });
+        return () => unsubscribe();
+    }, [db]);
 
     return (
         <div className="w-full h-full max-w-6xl bg-gray-800/50 rounded-2xl border border-gray-700/50 shadow-2xl shadow-black/20 p-6 flex flex-col">
@@ -109,9 +152,9 @@ const CommunityNews = () => {
                         {articles.map(article => (
                             <div key={article.id} className="bg-gray-900/70 p-4 rounded-lg">
                                 <h3 className="text-xl font-bold text-white">{article.title}</h3>
-                                <p className="text-sm text-gray-400 mt-1">By {article.author_name} &bull; Published on {new Date(article.created_at).toLocaleDateString()}</p>
+                                <p className="text-sm text-gray-400 mt-1">By {article.authorName} &bull; Published on {article.timestamp?.toDate().toLocaleDateString()}</p>
                                 <p className="text-gray-300 mt-3 whitespace-pre-wrap">{article.content}</p>
-                                <div className="mt-3 text-sm text-green-400 flex items-center gap-2"><Check size={16}/> Community Verified ({article.approvals} approvals)</div>
+                                <div className="mt-3 text-sm text-green-400 flex items-center gap-2"><Check size={16}/> Community Verified ({(article.approvals || []).length} approvals)</div>
                             </div>
                         ))}
                     </div>
