@@ -53,7 +53,7 @@ export default function App() {
 
   useEffect(() => {
     // Only initialize Firebase if the SDK has loaded and a valid config is present
-    if (firebase && firebaseConfig.apiKey && firebaseConfig.projectId) {
+    if (firebase && initializeApp && getAuth && signInAnonymously && getFirestore && firebaseConfig.apiKey && firebaseConfig.projectId) {
         try {
             const app = initializeApp(firebaseConfig);
             const auth = getAuth(app);
@@ -100,7 +100,7 @@ const Sidebar = ({ activeView, setActiveView }) => (
       <NavItem icon={BookLock} label="Community Vault" view="vault" activeView={activeView} onClick={() => setActiveView('vault')} />
       <NavItem icon={Info} label="About the Project" view="about" activeView={activeView} onClick={() => setActiveView('about')} />
     </ul>
-    <div className="mt-auto text-center text-xs text-gray-500"><p>Version 1.7.1</p><p>Resilient. Secure. Open.</p></div>
+    <div className="mt-auto text-center text-xs text-gray-500"><p>Version 1.7.2</p><p>Resilient. Secure. Open.</p></div>
   </nav>
 );
 
@@ -395,7 +395,7 @@ const JournalistPortal = ({ db }) => {
                 appsData.push({ ...doc.data(), id: doc.id });
             });
 
-            if (appsData.length === 0 && db !== mockFirebase) { // Don't seed mock DB
+            if (appsData.length === 0) { // Don't seed mock DB
                 const adminUser = { id: 'j-admin-01', name: 'Admin Journalist', affiliation: 'Chimera Core', reason: 'Initial member.', status: 'approved', approvals: 10, votedBy: [], denialReason: '' };
                 addDoc(collection(db, "applications"), adminUser);
                 setApplications([adminUser]);
