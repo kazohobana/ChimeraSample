@@ -10,15 +10,15 @@ const firebase = isBrowser ? window.firebase : null;
 const { initializeApp, getAuth, signInAnonymously } = firebase || {};
 const { getFirestore, collection, addDoc, doc, updateDoc, query, onSnapshot, orderBy, serverTimestamp } = (firebase && firebase.firestore) ? firebase.firestore : {};
 
-// Your web app's Firebase configuration
+// Your web app's Firebase configuration is now read from environment variables
 const firebaseConfig = {
-  apiKey: "AIzaSyDYhlbMuwSQ4-LOw9Su3xcVq5dOgBWYNaM",
-  authDomain: "chimera-test-acd1f.firebaseapp.com",
-  projectId: "chimera-test-acd1f",
-  storageBucket: "chimera-test-acd1f.appspot.com",
-  messagingSenderId: "730080953747",
-  appId: "1:730080953747:web:30246a579ce64a5cae9466",
-  measurementId: "G-4JYKE1BHYP"
+  apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
+  authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.REACT_APP_FIREBASE_APP_ID,
+  measurementId: process.env.REACT_APP_FIREBASE_MEASUREMENT_ID
 };
 
 
@@ -65,7 +65,7 @@ export default function App() {
             console.error("Firebase init failed.", e); 
         }
     } else {
-        console.warn("Firebase SDK not found or configuration is missing.");
+        console.warn("Firebase SDK not found or configuration is missing. Make sure your .env file is set up correctly.");
     }
   }, []);
 
@@ -221,10 +221,9 @@ const FactChecker = () => {
   const handleDeepAnalysis = async () => {
     if (!selectedFile) return;
 
-    // Use environment variable for the API key
-    const apiKey = ""; // In a real deployment, use process.env.REACT_APP_GEMINI_API_KEY
+    const apiKey = process.env.REACT_APP_GEMINI_API_KEY;
     if (!apiKey) {
-        alert("Gemini API key is not configured. This feature is disabled.");
+        alert("Gemini API key is not configured. Please set up your REACT_APP_GEMINI_API_KEY environment variable.");
         return;
     }
 
@@ -257,7 +256,7 @@ const FactChecker = () => {
   const handleGenerateBriefing = async () => {
     if (!analysisReport) return;
     
-    const apiKey = ""; // In a real deployment, use process.env.REACT_APP_GEMINI_API_KEY
+    const apiKey = process.env.REACT_APP_GEMINI_API_KEY;
     if (!apiKey) {
         alert("Gemini API key is not configured. This feature is disabled.");
         return;
@@ -408,7 +407,7 @@ const JournalistPortal = ({ db }) => {
                 appsData.push({ ...doc.data(), id: doc.id });
             });
 
-            if (appsData.length === 0) { // Don't seed mock DB
+            if (appsData.length === 0) {
                 const adminUser = { id: 'j-admin-01', name: 'Admin Journalist', affiliation: 'Chimera Core', reason: 'Initial member.', status: 'approved', approvals: 10, votedBy: [], denialReason: '' };
                 addDoc(collection(db, "applications"), adminUser);
                 setApplications([adminUser]);
