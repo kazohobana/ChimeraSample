@@ -222,9 +222,9 @@ const FactChecker = () => {
     if (!selectedFile) return;
 
     // Use environment variable for the API key
-    const apiKey = process.env.REACT_APP_GEMINI_API_KEY;
+    const apiKey = ""; // In a real deployment, use process.env.REACT_APP_GEMINI_API_KEY
     if (!apiKey) {
-        alert("Gemini API key is not configured. Please set up your REACT_APP_GEMINI_API_KEY environment variable.");
+        alert("Gemini API key is not configured. This feature is disabled.");
         return;
     }
 
@@ -257,9 +257,9 @@ const FactChecker = () => {
   const handleGenerateBriefing = async () => {
     if (!analysisReport) return;
     
-    const apiKey = process.env.REACT_APP_GEMINI_API_KEY;
+    const apiKey = ""; // In a real deployment, use process.env.REACT_APP_GEMINI_API_KEY
     if (!apiKey) {
-        alert("Gemini API key is not configured. Please set up your REACT_APP_GEMINI_API_KEY environment variable.");
+        alert("Gemini API key is not configured. This feature is disabled.");
         return;
     }
 
