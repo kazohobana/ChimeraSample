@@ -2,23 +2,20 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Shield, UploadCloud, Cpu, Wifi, Bot, AlertTriangle, CheckCircle, BarChart, FileImage, FileVideo, X, Loader2, Sparkles, History, BookLock, Info, PlusCircle, Trash2, MessageSquare, Send, User, Link2, ThumbsUp, ThumbsDown, FileSignature, Newspaper, Edit, BookOpen, Check } from 'lucide-react';
 
 // --- Firebase Imports ---
-// This check prevents the build from failing in a non-browser environment.
-const isBrowser = typeof window !== 'undefined';
+import { initializeApp } from 'firebase/app';
+import { getAuth, signInAnonymously } from 'firebase/auth';
+import { getFirestore, collection, addDoc, doc, updateDoc, query, onSnapshot, orderBy, serverTimestamp } from 'firebase/firestore';
 
-// Use the firebase SDK loaded in index.html
-const firebase = isBrowser ? window.firebase : null;
-const { initializeApp, getAuth, signInAnonymously } = firebase || {};
-const { getFirestore, collection, addDoc, doc, updateDoc, query, onSnapshot, orderBy, serverTimestamp } = (firebase && firebase.firestore) ? firebase.firestore : {};
 
-// Your web app's Firebase configuration is now read from environment variables
+// Your web app's Firebase configuration
 const firebaseConfig = {
-  apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
-  authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID,
-  storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.REACT_APP_FIREBASE_APP_ID,
-  measurementId: process.env.REACT_APP_FIREBASE_MEASUREMENT_ID
+  apiKey: "AIzaSyDYhlbMuwSQ4-LOw9Su3xcVq5dOgBWYNaM",
+  authDomain: "chimera-test-acd1f.firebaseapp.com",
+  projectId: "chimera-test-acd1f",
+  storageBucket: "chimera-test-acd1f.appspot.com",
+  messagingSenderId: "730080953747",
+  appId: "1:730080953747:web:30246a579ce64a5cae9466",
+  measurementId: "G-4JYKE1BHYP"
 };
 
 
@@ -52,8 +49,7 @@ export default function App() {
   const [db, setDb] = useState(null);
 
   useEffect(() => {
-    // Only initialize Firebase if the SDK has loaded and a valid config is present
-    if (firebase && initializeApp && getAuth && signInAnonymously && getFirestore && firebaseConfig.apiKey && firebaseConfig.projectId) {
+    if (firebaseConfig.apiKey && firebaseConfig.projectId) {
         try {
             const app = initializeApp(firebaseConfig);
             const auth = getAuth(app);
@@ -65,7 +61,7 @@ export default function App() {
             console.error("Firebase init failed.", e); 
         }
     } else {
-        console.warn("Firebase SDK not found or configuration is missing. Make sure your .env file is set up correctly.");
+        console.warn("Firebase configuration is missing.");
     }
   }, []);
 
@@ -221,9 +217,9 @@ const FactChecker = () => {
   const handleDeepAnalysis = async () => {
     if (!selectedFile) return;
 
-    const apiKey = process.env.REACT_APP_GEMINI_API_KEY;
+    const apiKey = ""; // In a real deployment, use process.env.REACT_APP_GEMINI_API_KEY
     if (!apiKey) {
-        alert("Gemini API key is not configured. Please set up your REACT_APP_GEMINI_API_KEY environment variable.");
+        alert("Gemini API key is not configured. This feature is disabled.");
         return;
     }
 
@@ -256,7 +252,7 @@ const FactChecker = () => {
   const handleGenerateBriefing = async () => {
     if (!analysisReport) return;
     
-    const apiKey = process.env.REACT_APP_GEMINI_API_KEY;
+    const apiKey = ""; // In a real deployment, use process.env.REACT_APP_GEMINI_API_KEY
     if (!apiKey) {
         alert("Gemini API key is not configured. This feature is disabled.");
         return;
