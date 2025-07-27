@@ -1,12 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Shield, UploadCloud, Cpu, Wifi, Bot, AlertTriangle, CheckCircle, BarChart, FileImage, FileVideo, X, Loader2, Sparkles, History, BookLock, Info, PlusCircle, Trash2, MessageSquare, Send, User, Link2, ThumbsUp, ThumbsDown, FileSignature, Newspaper, Edit, BookOpen, Check } from 'lucide-react';
 
-// --- Firebase Imports & Initialization ---
-
-// This check prevents the build from failing in a non-browser environment.
-const isBrowser = typeof window !== 'undefined';
-
-// Mocking Firebase for a self-contained component or if the SDK fails to load.
+// --- Firebase Imports ---
+// Mocking Firebase for a self-contained component. In a real app, you would use the actual Firebase SDK.
 let mockDb = {};
 const mockFirebase = {
     initializeApp: () => ({}), getAuth: () => ({}), signInAnonymously: () => Promise.resolve({ user: { uid: 'mockUser' } }), getFirestore: () => ({}),
@@ -46,9 +42,9 @@ const mockFirebase = {
     serverTimestamp: () => new Date(),
 };
 
-const firebase = isBrowser ? window.firebase : null;
-const { initializeApp, getAuth, signInAnonymously } = firebase || mockFirebase;
-const { getFirestore, collection, addDoc, doc, updateDoc, query, onSnapshot, orderBy, serverTimestamp } = (firebase && firebase.firestore) ? firebase.firestore : mockFirebase;
+const firebase = window.firebase || mockFirebase;
+const { initializeApp, getAuth, signInAnonymously } = firebase;
+const { getFirestore, collection, addDoc, doc, updateDoc, query, onSnapshot, orderBy, serverTimestamp } = firebase.firestore || mockFirebase;
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
@@ -119,7 +115,7 @@ const Sidebar = ({ activeView, setActiveView }) => (
       <NavItem icon={BookLock} label="Community Vault" view="vault" activeView={activeView} onClick={() => setActiveView('vault')} />
       <NavItem icon={Info} label="About the Project" view="about" activeView={activeView} onClick={() => setActiveView('about')} />
     </ul>
-    <div className="mt-auto text-center text-xs text-gray-500"><p>Version 1.7.1</p><p>Resilient. Secure. Open.</p></div>
+    <div className="mt-auto text-center text-xs text-gray-500"><p>Version 1.7.0</p><p>Resilient. Secure. Open.</p></div>
   </nav>
 );
 
