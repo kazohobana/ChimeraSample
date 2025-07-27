@@ -76,7 +76,7 @@ export default function App() {
       <div className="flex-1 flex flex-col h-screen">
         <Header />
         <main className="flex-grow p-4 md:p-8 flex items-center justify-center overflow-y-auto">
-          <ErrorBoundary>
+          <ErrorBoundary key={activeView}>
             {activeView === 'checker' && <FactChecker />}
             {activeView === 'news' && <CommunityNews db={db} />}
             {activeView === 'vault' && <CommunityVault />}
