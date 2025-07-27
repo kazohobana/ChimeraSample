@@ -88,6 +88,23 @@ const fileToBase64 = (file) => new Promise((resolve, reject) => {
 // --- Main Application Component ---
 export default function App() {
   const [activeView, setActiveView] = useState('checker');
+  const [db, setDb] = useState(null);
+
+  useEffect(() => {
+    try {
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        signInAnonymously(auth).then(() => { 
+            setDb(getFirestore(app)); 
+            console.log("Firebase Initialized Successfully");
+        }).catch(error => console.error("Firebase sign-in failed", error));
+    } catch (e) { 
+        console.error("Firebase init failed.", e); 
+        setDb(mockFirebase); // Fallback to mock for local dev if init fails
+    }
+  }, []);
+
+
   return (
     <div className="bg-gray-900 text-gray-200 font-sans min-h-screen flex w-full h-screen">
       <Sidebar activeView={activeView} setActiveView={setActiveView} />
@@ -96,9 +113,9 @@ export default function App() {
         <main className="flex-grow p-4 md:p-8 flex items-center justify-center overflow-y-auto">
           <ErrorBoundary>
             {activeView === 'checker' && <FactChecker />}
-            {activeView === 'news' && <CommunityNews />}
+            {activeView === 'news' && <CommunityNews db={db} />}
             {activeView === 'vault' && <CommunityVault />}
-            {activeView === 'portal' && <JournalistPortal />}
+            {activeView === 'portal' && <JournalistPortal db={db} />}
             {activeView === 'about' && <AboutProject />}
           </ErrorBoundary>
         </main>
@@ -135,22 +152,16 @@ const Header = () => {
 
 // --- Feature Components ---
 
-const CommunityNews = () => {
+const CommunityNews = ({ db }) => {
     const [articles, setArticles] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-    const [db, setDb] = useState(null);
 
     useEffect(() => {
-        try {
-            const app = initializeApp(firebaseConfig);
-            const auth = getAuth(app);
-            signInAnonymously(auth).then(() => { setDb(getFirestore(app)); }).catch(error => console.error("Firebase sign-in failed", error));
-        } catch (e) { console.error("Firebase init failed.", e); setDb(mockFirebase); }
-    }, []);
-
-    useEffect(() => {
-        if (!db) return;
+        if (!db) {
+            setLoading(true); // Wait for db prop
+            return;
+        }
         setLoading(true);
         const q = query(collection(db, "articles"), orderBy("timestamp", "desc"));
         const unsubscribe = onSnapshot(q, snapshot => {
@@ -405,20 +416,11 @@ const VotingInterface = ({ applications, onVote, journalistId }) => {
     </>);
 };
 
-const JournalistPortal = () => {
+const JournalistPortal = ({ db }) => {
     const [journalistId, setJournalistId] = useState(localStorage.getItem('chimeraJournalistId'));
     const [applications, setApplications] = useState([]);
     const [view, setView] = useState('login'); // login, apply, pending, portal
-    const [db, setDb] = useState(null);
-
-    useEffect(() => {
-        try {
-            const app = initializeApp(firebaseConfig);
-            const auth = getAuth(app);
-            signInAnonymously(auth).then(() => { setDb(getFirestore(app)); }).catch(error => console.error("Firebase sign-in failed", error));
-        } catch (e) { console.error("Firebase init failed.", e); setDb(mockFirebase); }
-    }, []);
-
+    
     useEffect(() => {
         if (!db) return;
         const q = query(collection(db, "applications"));
@@ -487,6 +489,10 @@ const JournalistPortal = () => {
         setJournalistId(null);
         setView('login');
     };
+
+    if (!db) {
+        return <div className="flex justify-center items-center h-full"><Loader2 className="animate-spin text-cyan-400" size={48} /></div>;
+    }
 
     if (journalistId) {
         const journalist = applications.find(app => app.id === journalistId);
