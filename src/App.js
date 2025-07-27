@@ -49,15 +49,15 @@ const firebase = isBrowser ? window.firebase : null;
 const { initializeApp, getAuth, signInAnonymously } = firebase || mockFirebase;
 const { getFirestore, collection, addDoc, doc, updateDoc, query, onSnapshot, orderBy, serverTimestamp } = (firebase && firebase.firestore) ? firebase.firestore : mockFirebase;
 
-// Your web app's Firebase configuration
+// Your web app's Firebase configuration is now read from environment variables
 const firebaseConfig = {
-  apiKey: "AIzaSyApMUeZGVS8IuaSMfGKamCZPo3WRB3tHiA",
-  authDomain: "chimeracentralied.firebaseapp.com",
-  projectId: "chimeracentralied",
-  storageBucket: "chimeracentralied.appspot.com",
-  messagingSenderId: "408026144268",
-  appId: "1:408026144268:web:73bfbd84bca889e3a49829",
-  measurementId: "G-QG5F5RGYW3"
+  apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
+  authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.REACT_APP_FIREBASE_APP_ID,
+  measurementId: process.env.REACT_APP_FIREBASE_MEASUREMENT_ID
 };
 
 
@@ -91,16 +91,22 @@ export default function App() {
   const [db, setDb] = useState(null);
 
   useEffect(() => {
-    try {
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        signInAnonymously(auth).then(() => { 
-            setDb(getFirestore(app)); 
-            console.log("Firebase Initialized Successfully");
-        }).catch(error => console.error("Firebase sign-in failed", error));
-    } catch (e) { 
-        console.error("Firebase init failed.", e); 
-        setDb(mockFirebase); // Fallback to mock for local dev if init fails
+    // Check if all required Firebase config keys are present
+    if (firebaseConfig.apiKey && firebaseConfig.projectId) {
+        try {
+            const app = initializeApp(firebaseConfig);
+            const auth = getAuth(app);
+            signInAnonymously(auth).then(() => { 
+                setDb(getFirestore(app)); 
+                console.log("Firebase Initialized Successfully");
+            }).catch(error => console.error("Firebase sign-in failed", error));
+        } catch (e) { 
+            console.error("Firebase init failed.", e); 
+            setDb(mockFirebase); // Fallback to mock for local dev if init fails
+        }
+    } else {
+        console.warn("Firebase configuration is missing. Using mock data. Please set up your environment variables.");
+        setDb(mockFirebase);
     }
   }, []);
 
@@ -359,63 +365,6 @@ const FactChecker = () => {
 };
 
 // --- Journalist Portal Components ---
-const VotingInterface = ({ applications, onVote, journalistId }) => {
-    const [denialReason, setDenialReason] = useState('');
-    const [denyingAppId, setDenyingAppId] = useState(null);
-    const pendingApps = applications.filter(app => app.status === 'pending');
-
-    const handleDenyClick = (appId) => {
-        setDenyingAppId(appId);
-    };
-
-    const submitDenial = () => {
-        if (!denialReason) {
-            alert("Please provide a reason for denial.");
-            return;
-        }
-        onVote(denyingAppId, journalistId, false, denialReason);
-        setDenyingAppId(null);
-        setDenialReason('');
-    };
-
-    return (<><div className="flex flex-col h-full">
-        <h3 className="text-xl font-semibold text-amber-300 mb-4 p-3 border-b border-gray-700/50">Community Voting</h3>
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
-            {pendingApps.length === 0 && <p className="text-gray-500">No pending applications.</p>}
-            {pendingApps.map(app => (
-                <div key={app.id} className="bg-gray-900/70 p-4 rounded-lg">
-                    <h4 className="font-bold text-white">{app.name}</h4><p className="text-sm text-gray-400">{app.affiliation}</p>
-                    <p className="text-sm my-2 p-3 bg-gray-800 rounded">{app.reason}</p>
-                    <div className="flex items-center justify-between mt-2">
-                        <div className="text-sm font-bold text-cyan-400">{app.approvals || 0} / 10 Approvals</div>
-                        {app.votedBy && app.votedBy.includes(journalistId) ? (<p className="text-sm text-green-400">You have voted.</p>) : (
-                            <div className="flex gap-2">
-                                <button onClick={() => handleDenyClick(app.id)} className="flex items-center gap-1 bg-red-500/20 text-red-300 px-3 py-1 rounded-md hover:bg-red-500/40"><ThumbsDown size={16}/> Deny</button>
-                                <button onClick={() => onVote(app.id, journalistId, true)} className="flex items-center gap-1 bg-green-500/20 text-green-300 px-3 py-1 rounded-md hover:bg-green-500/40"><ThumbsUp size={16}/> Approve</button>
-                            </div>
-                        )}
-                    </div>
-                </div>
-            ))}
-        </div>
-    </div>
-    {denyingAppId && <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center" onClick={() => setDenyingAppId(null)}>
-        <div className="bg-gray-800 rounded-2xl border border-gray-700 p-8 max-w-md w-full" onClick={e => e.stopPropagation()}>
-            <h3 className="text-xl font-bold text-white mb-2">Reason for Denial</h3>
-            <p className="text-gray-400 mb-4">Please provide a brief, non-public reason for denying this application.</p>
-            <select value={denialReason} onChange={e => setDenialReason(e.target.value)} className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-3 mb-4 focus:outline-none focus:ring-2 focus:ring-red-500">
-                <option value="">Select a reason...</option>
-                <option value="Incomplete or suspicious application">Incomplete or suspicious application</option>
-                <option value="Applicant does not appear to be a journalist">Applicant does not appear to be a journalist</option>
-                <option value="Security concern">Security concern</option>
-                <option value="Other">Other</option>
-            </select>
-            <div className="flex gap-4"><button onClick={() => setDenyingAppId(null)} className="w-full bg-gray-600 text-white py-2 rounded-lg font-semibold hover:bg-gray-500">Cancel</button><button onClick={submitDenial} className="w-full bg-red-600 text-white py-2 rounded-lg font-semibold hover:bg-red-500">Submit Denial</button></div>
-        </div>
-    </div>}
-    </>);
-};
-
 const JournalistPortal = ({ db }) => {
     const [journalistId, setJournalistId] = useState(localStorage.getItem('chimeraJournalistId'));
     const [applications, setApplications] = useState([]);
