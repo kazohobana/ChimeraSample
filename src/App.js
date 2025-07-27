@@ -5,49 +5,10 @@ import { Shield, UploadCloud, Cpu, Wifi, Bot, AlertTriangle, CheckCircle, BarCha
 // This check prevents the build from failing in a non-browser environment.
 const isBrowser = typeof window !== 'undefined';
 
-// Mocking Firebase for a self-contained component or if the SDK fails to load.
-let mockDb = {};
-const mockFirebase = {
-    initializeApp: () => ({}), getAuth: () => ({}), signInAnonymously: () => Promise.resolve({ user: { uid: 'mockUser' } }), getFirestore: () => ({}),
-    collection: (db, path) => ({ path }), doc: (db, path, id) => ({ path: `${path}/${id}` }),
-    addDoc: (collectionRef, data) => {
-        const docId = Date.now().toString();
-        if (!mockDb[collectionRef.path]) mockDb[collectionRef.path] = {};
-        mockDb[collectionRef.path][docId] = { ...data, id: docId };
-        console.log("Mock Firestore: Added doc to", collectionRef.path);
-        return Promise.resolve({ id: docId });
-    },
-    updateDoc: (docRef, data) => {
-        const pathParts = docRef.path.split('/');
-        const docId = pathParts.pop();
-        const collectionPath = pathParts.join('/');
-        if (mockDb[collectionPath] && mockDb[collectionPath][docId]) {
-            mockDb[collectionPath][docId] = { ...mockDb[collectionPath][docId], ...data };
-        }
-        console.log("Mock Firestore: Updated doc at", docRef.path);
-        return Promise.resolve();
-    },
-    query: (collectionRef) => collectionRef, orderBy: (q) => q,
-    onSnapshot: (queryRef, callback) => {
-        console.log("Mock Firestore: Snapshot listener attached to", queryRef.path);
-        callback({
-            docs: Object.values(mockDb[queryRef.path] || {}).map(doc => ({
-                id: doc.id,
-                data: () => doc,
-            })),
-            forEach: (cb) => {
-                const collectionData = mockDb[queryRef.path] || {};
-                Object.values(collectionData).forEach(doc => cb({ id: doc.id, data: () => doc }));
-            }
-        });
-        return () => { console.log("Mock Firestore: Unsubscribed from", queryRef.path) };
-    },
-    serverTimestamp: () => new Date(),
-};
-
+// Use the firebase SDK loaded in index.html
 const firebase = isBrowser ? window.firebase : null;
-const { initializeApp, getAuth, signInAnonymously } = firebase || mockFirebase;
-const { getFirestore, collection, addDoc, doc, updateDoc, query, onSnapshot, orderBy, serverTimestamp } = (firebase && firebase.firestore) ? firebase.firestore : mockFirebase;
+const { initializeApp, getAuth, signInAnonymously } = firebase || {};
+const { getFirestore, collection, addDoc, doc, updateDoc, query, onSnapshot, orderBy, serverTimestamp } = (firebase && firebase.firestore) ? firebase.firestore : {};
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
@@ -91,8 +52,8 @@ export default function App() {
   const [db, setDb] = useState(null);
 
   useEffect(() => {
-    // Check if all required Firebase config keys are present
-    if (firebaseConfig.apiKey && firebaseConfig.projectId) {
+    // Only initialize Firebase if the SDK has loaded and a valid config is present
+    if (firebase && firebaseConfig.apiKey && firebaseConfig.projectId) {
         try {
             const app = initializeApp(firebaseConfig);
             const auth = getAuth(app);
@@ -102,11 +63,9 @@ export default function App() {
             }).catch(error => console.error("Firebase sign-in failed", error));
         } catch (e) { 
             console.error("Firebase init failed.", e); 
-            setDb(mockFirebase); // Fallback to mock for local dev if init fails
         }
     } else {
-        console.warn("Firebase configuration is missing. Using mock data. Please set up your environment variables.");
-        setDb(mockFirebase);
+        console.warn("Firebase SDK not found or configuration is missing.");
     }
   }, []);
 
