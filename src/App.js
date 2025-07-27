@@ -220,6 +220,14 @@ const FactChecker = () => {
 
   const handleDeepAnalysis = async () => {
     if (!selectedFile) return;
+
+    // Use environment variable for the API key
+    const apiKey = process.env.REACT_APP_GEMINI_API_KEY;
+    if (!apiKey) {
+        alert("Gemini API key is not configured. Please set up your REACT_APP_GEMINI_API_KEY environment variable.");
+        return;
+    }
+
     setIsAnalyzing(true);
     setAnalysisReport(null);
     setContextualBriefing(null);
@@ -230,7 +238,6 @@ const FactChecker = () => {
       const schema = { type: "OBJECT", properties: { trustScore: { type: "STRING", enum: ["High Confidence", "Suspicious", "Manipulation Detected"], }, keyFindings: { type: "ARRAY", items: { type: "STRING" }, }, conciseReport: { type: "STRING" } }, required: ["trustScore", "keyFindings", "conciseReport"], };
       const prompt = `As a senior digital forensics analyst, examine this media file for manipulation. Your response MUST be a JSON object matching this schema: ${JSON.stringify(schema)}`;
       const payload = { contents: [{ role: "user", parts: [{ text: prompt }, { inlineData: { mimeType: mimeType, data: base64Data } }] }], generationConfig: { responseMimeType: "application/json", responseSchema: schema } };
-      const apiKey = "";
       const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
       const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
       if (!response.ok) throw new Error(`API Error: ${response.status} ${response.statusText}`);
@@ -249,13 +256,19 @@ const FactChecker = () => {
   
   const handleGenerateBriefing = async () => {
     if (!analysisReport) return;
+    
+    const apiKey = process.env.REACT_APP_GEMINI_API_KEY;
+    if (!apiKey) {
+        alert("Gemini API key is not configured. Please set up your REACT_APP_GEMINI_API_KEY environment variable.");
+        return;
+    }
+
     setIsGeneratingBriefing(true);
     setContextualBriefing(null);
     setError(null);
     try {
       const prompt = `Based on this forensic report, generate a "Contextual Briefing" for a non-technical user with two markdown sections: 1. **Plain-Language Summary**, 2. **Potential Impact & Verification**. Report: ${JSON.stringify(analysisReport)}`;
       const payload = { contents: [{ role: "user", parts: [{ text: prompt }] }] };
-      const apiKey = "";
       const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
       const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
       if (!response.ok) throw new Error(`API Error: ${response.status} ${response.statusText}`);
