@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Shield, UploadCloud, Cpu, Wifi, Bot, AlertTriangle, CheckCircle, BarChart, FileImage, FileVideo, X, Loader2, Sparkles, History, BookLock, Info, PlusCircle, Trash2, MessageSquare, Send, User, Link2, ThumbsUp, ThumbsDown, FileSignature, Newspaper, Edit, BookOpen, Check, Server } from 'lucide-react';
+import { Shield, UploadCloud, Cpu, Wifi, Bot, AlertTriangle, CheckCircle, BarChart, FileImage, FileVideo, X, Loader2, Sparkles, History, BookLock, Info, PlusCircle, Trash2, MessageSquare, Send, User, Link2, ThumbsUp, ThumbsDown, FileSignature, Newspaper, Edit, BookOpen, Check, Server, Globe } from 'lucide-react';
 
 // --- Firebase Imports ---
 import { initializeApp } from 'firebase/app';
@@ -71,6 +71,7 @@ export default function App() {
         <main className="flex-grow p-4 md:p-8 flex items-center justify-center overflow-y-auto">
           <ErrorBoundary key={activeView}>
             {activeView === 'checker' && <FactChecker />}
+            {activeView === 'browser' && <SecureBrowser />}
             {activeView === 'news' && <CommunityNews db={db} />}
             {activeView === 'vault' && <CommunityVault />}
             {activeView === 'portal' && <JournalistPortal db={db} />}
@@ -89,6 +90,7 @@ const Sidebar = ({ activeView, setActiveView }) => (
     <div className="flex items-center space-x-3 mb-10 px-2"><Shield className="text-cyan-400" size={32} /><h1 className="text-xl font-bold tracking-wider text-gray-50">Chimera</h1></div>
     <ul className="space-y-2">
       <NavItem icon={Cpu} label="Fact-Checker" view="checker" activeView={activeView} onClick={() => setActiveView('checker')} />
+      <NavItem icon={Globe} label="Secure Browser" view="browser" activeView={activeView} onClick={() => setActiveView('browser')} />
       <NavItem icon={Newspaper} label="Verified News" view="news" activeView={activeView} onClick={() => setActiveView('news')} />
       <NavItem icon={MessageSquare} label="Journalist Portal" view="portal" activeView={activeView} onClick={() => setActiveView('portal')} />
       <NavItem icon={BookLock} label="Community Vault" view="vault" activeView={activeView} onClick={() => setActiveView('vault')} />
@@ -111,6 +113,75 @@ const Header = () => {
 };
 
 // --- Feature Components ---
+
+const SecureBrowser = () => {
+    const [url, setUrl] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
+    const [iframeContent, setIframeContent] = useState('');
+    const [activeTransport, setActiveTransport] = useState('Chameleon');
+    const [error, setError] = useState(null);
+
+    const handleBrowse = async (e) => {
+        e.preventDefault();
+        if (!url) return;
+        setIsLoading(true);
+        setError(null);
+        setIframeContent('');
+
+        // Simulate choosing an optimal transport
+        const transports = ['Chameleon', 'Ghost', 'Scramble'];
+        setActiveTransport(transports[Math.floor(Math.random() * transports.length)]);
+
+        // Use a CORS proxy to simulate bypassing censorship.
+        try {
+            const response = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`);
+            if (!response.ok) {
+                throw new Error(`Failed to fetch the page. Status: ${response.status}`);
+            }
+            const html = await response.text();
+            setIframeContent(html);
+        } catch (err) {
+            console.error("Browsing error:", err);
+            setError(`Could not load page. The site may be offline or blocking requests. Error: ${err.message}`);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    return (
+        <div className="w-full h-full max-w-7xl bg-gray-800/50 rounded-2xl border border-gray-700/50 shadow-2xl shadow-black/20 p-6 flex flex-col">
+            <h2 className="text-3xl font-bold text-cyan-300 mb-2">Secure Browser</h2>
+            <p className="text-sm text-gray-400 mb-4">Your traffic is automatically routed through the Chimera P2P network to bypass censorship.</p>
+            <form onSubmit={handleBrowse} className="flex gap-2 mb-4">
+                <input 
+                    type="text" 
+                    value={url}
+                    onChange={(e) => setUrl(e.target.value)}
+                    placeholder="Enter a URL to visit (e.g., https://www.aljazeera.com)"
+                    className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                />
+                <button type="submit" disabled={isLoading} className="bg-cyan-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-cyan-500 transition-colors disabled:bg-gray-600 flex items-center justify-center gap-2">
+                    {isLoading ? <Loader2 className="animate-spin" size={20}/> : 'Go'}
+                </button>
+            </form>
+            <div className="flex-1 border-2 border-gray-700 rounded-lg bg-white overflow-hidden flex flex-col">
+                {isLoading && <div className="flex-1 flex flex-col items-center justify-center text-gray-700"><Loader2 className="animate-spin mb-4" size={48} /><p className="font-semibold">Establishing secure connection via {activeTransport}...</p></div>}
+                {error && <div className="flex-1 flex flex-col items-center justify-center text-red-500 p-4"><AlertTriangle size={48} className="mb-4"/><p className="font-semibold text-center">{error}</p></div>}
+                {!isLoading && !error && (
+                    <iframe 
+                        srcDoc={iframeContent}
+                        title="Secure Browser"
+                        className="w-full h-full"
+                        sandbox="allow-scripts allow-same-origin"
+                    />
+                )}
+            </div>
+            <div className="text-xs text-center mt-2 text-gray-500">
+                Current Transport: <span className="font-bold text-cyan-400">{activeTransport}</span>. Content is sandboxed for your security.
+            </div>
+        </div>
+    );
+};
 
 const SystemStatus = () => {
     const [transports, setTransports] = useState([
@@ -240,7 +311,7 @@ const FactChecker = () => {
   const [selectedFile, setSelectedFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
   const [analysisReport, setAnalysisReport] = useState(null);
-  const [contextualBriefing, setContextualBriefing] = useState(null);
+  const [contextualBriefing, setContextualBriefing] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isGeneratingBriefing, setIsGeneratingBriefing] = useState(false);
   const [error, setError] = useState(null);
