@@ -95,7 +95,7 @@ const Sidebar = ({ activeView, setActiveView }) => (
       <NavItem icon={Server} label="System Status" view="status" activeView={activeView} onClick={() => setActiveView('status')} />
       <NavItem icon={Info} label="About the Project" view="about" activeView={activeView} onClick={() => setActiveView('about')} />
     </ul>
-    <div className="mt-auto text-center text-xs text-gray-500"><p>Version 1.9.1</p><p>Resilient. Secure. Open.</p></div>
+    <div className="mt-auto text-center text-xs text-gray-500"><p>Version 1.9.2</p><p>Resilient. Secure. Open.</p></div>
   </nav>
 );
 
@@ -659,7 +659,7 @@ const ArticleReviewList = ({ articles, onVote, journalistId }) => {
         try {
             const prompt = `Fact-check the following article. Identify key claims and verify them. Note any potential bias or unsubstantiated statements. Provide a concise summary of your findings in markdown. Article: "${article.title}\n\n${article.content}"`;
             const payload = { contents: [{ role: "user", parts: [{ text: prompt }] }] };
-            const apiKey = firebaseConfig.apiKey;
+            const apiKey = "AIzaSyBaP_59KHkm2szz3avS69ouPQ7cNcaqPic";
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
             const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
             if (!response.ok) throw new Error("API request failed");
@@ -752,7 +752,7 @@ const ChatWindow = ({ journalistId, source, db }) => {
         try {
             const prompt = `A journalist is messaging a sensitive source. Rephrase the following message to be more neutral, objective, and less leading. Return only the rephrased message as a raw string. Original message: "${newMessage}"`;
             const payload = { contents: [{ role: "user", parts: [{ text: prompt }] }] };
-            const apiKey = firebaseConfig.apiKey;
+            const apiKey = "AIzaSyBaP_59KHkm2szz3avS69ouPQ7cNcaqPic";
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
             const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
             if (!response.ok) throw new Error("API request failed");
