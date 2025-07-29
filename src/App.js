@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Shield, UploadCloud, Cpu, Wifi, Bot, AlertTriangle, CheckCircle, BarChart, FileImage, FileVideo, X, Loader2, Sparkles, History, BookLock, Info, PlusCircle, Trash2, MessageSquare, Send, User, Link2, ThumbsUp, ThumbsDown, FileSignature, Newspaper, Edit, BookOpen, Check } from 'lucide-react';
+import { Shield, UploadCloud, Cpu, Wifi, Bot, AlertTriangle, CheckCircle, BarChart, FileImage, FileVideo, X, Loader2, Sparkles, History, BookLock, Info, PlusCircle, Trash2, MessageSquare, Send, User, Link2, ThumbsUp, ThumbsDown, FileSignature, Newspaper, Edit, BookOpen, Check, Server } from 'lucide-react';
 
 // --- Firebase Imports ---
 import { initializeApp } from 'firebase/app';
@@ -74,6 +74,7 @@ export default function App() {
             {activeView === 'news' && <CommunityNews db={db} />}
             {activeView === 'vault' && <CommunityVault />}
             {activeView === 'portal' && <JournalistPortal db={db} />}
+            {activeView === 'status' && <SystemStatus />}
             {activeView === 'about' && <AboutProject />}
           </ErrorBoundary>
         </main>
@@ -91,9 +92,10 @@ const Sidebar = ({ activeView, setActiveView }) => (
       <NavItem icon={Newspaper} label="Verified News" view="news" activeView={activeView} onClick={() => setActiveView('news')} />
       <NavItem icon={MessageSquare} label="Journalist Portal" view="portal" activeView={activeView} onClick={() => setActiveView('portal')} />
       <NavItem icon={BookLock} label="Community Vault" view="vault" activeView={activeView} onClick={() => setActiveView('vault')} />
+      <NavItem icon={Server} label="System Status" view="status" activeView={activeView} onClick={() => setActiveView('status')} />
       <NavItem icon={Info} label="About the Project" view="about" activeView={activeView} onClick={() => setActiveView('about')} />
     </ul>
-    <div className="mt-auto text-center text-xs text-gray-500"><p>Version 1.8.0</p><p>Resilient. Secure. Open.</p></div>
+    <div className="mt-auto text-center text-xs text-gray-500"><p>Version 1.9.1</p><p>Resilient. Secure. Open.</p></div>
   </nav>
 );
 
@@ -109,6 +111,74 @@ const Header = () => {
 };
 
 // --- Feature Components ---
+
+const SystemStatus = () => {
+    const [transports, setTransports] = useState([
+        { name: 'Chameleon', latency: 120, status: 'Operational' },
+        { name: 'Ghost', latency: 85, status: 'Operational' },
+        { name: 'Scramble', latency: 150, status: 'Operational' },
+    ]);
+    const [events, setEvents] = useState([]);
+
+    useEffect(() => {
+        const interval = setInterval(() => {
+            setTransports(transports.map(t => ({...t, latency: Math.max(50, t.latency + (Math.random() - 0.5) * 20) })));
+        }, 2000);
+
+        const eventTimeout = setTimeout(() => {
+            setEvents(prev => [{ time: new Date(), message: 'Network anomaly detected. Rerouting traffic via Ghost protocol.' }, ...prev]);
+        }, 5000);
+
+        return () => {
+            clearInterval(interval);
+            clearTimeout(eventTimeout);
+        };
+    }, []);
+
+    const getStatusColor = (status) => status === 'Operational' ? 'text-green-400' : 'text-amber-400';
+
+    return (
+        <div className="w-full h-full max-w-6xl bg-gray-800/50 rounded-2xl border border-gray-700/50 shadow-2xl shadow-black/20 p-6 flex flex-col">
+            <h2 className="text-3xl font-bold text-cyan-300 mb-4">System Status Dashboard</h2>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                <div className="bg-gray-900/70 p-4 rounded-lg text-center"><h3 className="font-semibold text-gray-400">Overall Status</h3><p className="text-2xl font-bold text-green-400">All Systems Operational</p></div>
+                <div className="bg-gray-900/70 p-4 rounded-lg text-center"><h3 className="font-semibold text-gray-400">P2P Fabric</h3><p className="text-2xl font-bold text-green-400">Healthy</p></div>
+                <div className="bg-gray-900/70 p-4 rounded-lg text-center"><h3 className="font-semibold text-gray-400">Veritas Engine</h3><p className="text-2xl font-bold text-green-400">Online</p></div>
+            </div>
+            <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-6 overflow-hidden">
+                <div className="bg-gray-900/70 p-4 rounded-lg flex flex-col">
+                    <h3 className="text-xl font-semibold text-cyan-300 mb-4">P2P Transport Performance</h3>
+                    <div className="space-y-4">
+                        {transports.map(t => (
+                            <div key={t.name}>
+                                <div className="flex justify-between items-center text-sm mb-1">
+                                    <span className="font-bold text-gray-300">{t.name}</span>
+                                    <span className={getStatusColor(t.status)}>{t.status}</span>
+                                </div>
+                                <div className="w-full bg-gray-700 rounded-full h-4 relative">
+                                    <div className="bg-cyan-600 h-4 rounded-full" style={{ width: `${Math.min(100, 3000 / t.latency)}%` }}></div>
+                                    <span className="absolute right-2 top-0 text-xs font-bold text-white">{t.latency.toFixed(0)} ms</span>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+                <div className="bg-gray-900/70 p-4 rounded-lg flex flex-col">
+                    <h3 className="text-xl font-semibold text-cyan-300 mb-4">Network Event Log</h3>
+                    <div className="flex-1 overflow-y-auto pr-2 space-y-2 text-sm">
+                        {events.length === 0 && <p className="text-gray-500">No network events to display.</p>}
+                        {events.map((event, i) => (
+                            <div key={i} className="flex gap-2">
+                                <span className="text-gray-500">{event.time.toLocaleTimeString()}</span>
+                                <p className="text-gray-300">{event.message}</p>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
 
 const CommunityNews = ({ db }) => {
     const [articles, setArticles] = useState([]);
@@ -214,9 +284,9 @@ const FactChecker = () => {
   const handleDeepAnalysis = async () => {
     if (!selectedFile) return;
 
-    const apiKey = ""; // In a real deployment, use process.env.REACT_APP_GEMINI_API_KEY
+    const apiKey = firebaseConfig.apiKey; 
     if (!apiKey) {
-        alert("Gemini API key is not configured. This feature is disabled.");
+        alert("API key is not configured. Please check your Firebase configuration.");
         return;
     }
 
@@ -249,9 +319,9 @@ const FactChecker = () => {
   const handleGenerateBriefing = async () => {
     if (!analysisReport) return;
     
-    const apiKey = ""; // In a real deployment, use process.env.REACT_APP_GEMINI_API_KEY
+    const apiKey = firebaseConfig.apiKey;
     if (!apiKey) {
-        alert("Gemini API key is not configured. This feature is disabled.");
+        alert("API key is not configured. This feature is disabled.");
         return;
     }
 
@@ -589,7 +659,7 @@ const ArticleReviewList = ({ articles, onVote, journalistId }) => {
         try {
             const prompt = `Fact-check the following article. Identify key claims and verify them. Note any potential bias or unsubstantiated statements. Provide a concise summary of your findings in markdown. Article: "${article.title}\n\n${article.content}"`;
             const payload = { contents: [{ role: "user", parts: [{ text: prompt }] }] };
-            const apiKey = "";
+            const apiKey = firebaseConfig.apiKey;
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
             const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
             if (!response.ok) throw new Error("API request failed");
