@@ -284,9 +284,9 @@ const FactChecker = () => {
   const handleDeepAnalysis = async () => {
     if (!selectedFile) return;
 
-    const apiKey = firebaseConfig.apiKey; 
+    const apiKey = "AIzaSyBaP_59KHkm2szz3avS69ouPQ7cNcaqPic"; 
     if (!apiKey) {
-        alert("API key is not configured. Please check your Firebase configuration.");
+        alert("Gemini API key is not configured. This feature is disabled.");
         return;
     }
 
@@ -319,9 +319,9 @@ const FactChecker = () => {
   const handleGenerateBriefing = async () => {
     if (!analysisReport) return;
     
-    const apiKey = firebaseConfig.apiKey;
+    const apiKey = "AIzaSyBaP_59KHkm2szz3avS69ouPQ7cNcaqPic";
     if (!apiKey) {
-        alert("API key is not configured. This feature is disabled.");
+        alert("Gemini API key is not configured. This feature is disabled.");
         return;
     }
 
@@ -752,7 +752,7 @@ const ChatWindow = ({ journalistId, source, db }) => {
         try {
             const prompt = `A journalist is messaging a sensitive source. Rephrase the following message to be more neutral, objective, and less leading. Return only the rephrased message as a raw string. Original message: "${newMessage}"`;
             const payload = { contents: [{ role: "user", parts: [{ text: prompt }] }] };
-            const apiKey = "";
+            const apiKey = firebaseConfig.apiKey;
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
             const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
             if (!response.ok) throw new Error("API request failed");
