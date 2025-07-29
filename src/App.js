@@ -6,15 +6,15 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously } from 'firebase/auth';
 import { getFirestore, collection, addDoc, doc, updateDoc, query, onSnapshot, orderBy, serverTimestamp } from 'firebase/firestore';
 
-// Your web app's Firebase configuration
+// Your web app's Firebase configuration is now read from environment variables
 const firebaseConfig = {
-  apiKey: "AIzaSyDYhlbMuwSQ4-LOw9Su3xcVq5dOgBWYNaM",
-  authDomain: "chimera-test-acd1f.firebaseapp.com",
-  projectId: "chimera-test-acd1f",
-  storageBucket: "chimera-test-acd1f.appspot.com",
-  messagingSenderId: "730080953747",
-  appId: "1:730080953747:web:30246a579ce64a5cae9466",
-  measurementId: "G-4JYKE1BHYP"
+  apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
+  authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.REACT_APP_FIREBASE_APP_ID,
+  measurementId: process.env.REACT_APP_FIREBASE_MEASUREMENT_ID
 };
 
 // --- Error Boundary Component ---
@@ -59,7 +59,7 @@ export default function App() {
             console.error("Firebase init failed.", e); 
         }
     } else {
-        console.warn("Firebase configuration is missing.");
+        console.warn("Firebase configuration is missing. Make sure your Vercel environment variables are set up correctly.");
     }
   }, []);
 
@@ -284,9 +284,9 @@ const FactChecker = () => {
   const handleDeepAnalysis = async () => {
     if (!selectedFile) return;
 
-    const apiKey = "AIzaSyBaP_59KHkm2szz3avS69ouPQ7cNcaqPic"; 
+    const apiKey = process.env.REACT_APP_GEMINI_API_KEY; 
     if (!apiKey) {
-        alert("Gemini API key is not configured. This feature is disabled.");
+        alert("Gemini API key is not configured. Please set up your Vercel environment variables.");
         return;
     }
 
@@ -319,7 +319,7 @@ const FactChecker = () => {
   const handleGenerateBriefing = async () => {
     if (!analysisReport) return;
     
-    const apiKey = "AIzaSyBaP_59KHkm2szz3avS69ouPQ7cNcaqPic";
+    const apiKey = process.env.REACT_APP_GEMINI_API_KEY;
     if (!apiKey) {
         alert("Gemini API key is not configured. This feature is disabled.");
         return;
