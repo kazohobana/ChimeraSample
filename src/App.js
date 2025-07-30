@@ -2,19 +2,21 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Shield, UploadCloud, Cpu, Wifi, Bot, AlertTriangle, CheckCircle, BarChart, FileImage, FileVideo, X, Loader2, Sparkles, History, BookLock, Info, PlusCircle, Trash2, MessageSquare, Send, User, Link2, ThumbsUp, ThumbsDown, FileSignature, Newspaper, Edit, BookOpen, Check, Server, Globe } from 'lucide-react';
 
 // --- Firebase Imports ---
-import { initializeApp } from 'firebase/app';
-import { getAuth, signInAnonymously } from 'firebase/auth';
-import { getFirestore, collection, addDoc, doc, updateDoc, query, onSnapshot, orderBy, serverTimestamp } from 'firebase/firestore';
+// Switched to v8 compat libraries to address connection issues.
+import firebase from 'firebase/compat/app';
+import 'firebase/compat/auth';
+import 'firebase/compat/firestore';
+
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
-  apiKey: "AIzaSyDYhlbMuwSQ4-LOw9Su3xcVq5dOgBWYNaM",
-  authDomain: "chimera-test-acd1f.firebaseapp.com",
-  projectId: "chimera-test-acd1f",
-  storageBucket: "chimera-test-acd1f.appspot.com",
-  messagingSenderId: "730080953747",
-  appId: "1:730080953747:web:30246a579ce64a5cae9466",
-  measurementId: "G-4JYKE1BHYP"
+  apiKey: "AIzaSyAIcU46cd9mY6Q9rbvWK4KYWPWRqAGtbYg",
+  authDomain: "chimtest-6854a.firebaseapp.com",
+  projectId: "chimtest-6854a",
+  storageBucket: "chimtest-6854a.appspot.com",
+  messagingSenderId: "178975469028",
+  appId: "1:178975469028:web:e520bf5ef8490125082bf1",
+  measurementId: "G-KD1BPXH3BV"
 };
 
 // --- Error Boundary Component ---
@@ -49,11 +51,12 @@ export default function App() {
   useEffect(() => {
     if (firebaseConfig.apiKey && firebaseConfig.projectId) {
         try {
-            const app = initializeApp(firebaseConfig);
-            const auth = getAuth(app);
-            signInAnonymously(auth).then(() => { 
-                setDb(getFirestore(app)); 
-                console.log("Firebase Initialized Successfully");
+            if (!firebase.apps.length) {
+                firebase.initializeApp(firebaseConfig);
+            }
+            firebase.auth().signInAnonymously().then(() => { 
+                setDb(firebase.firestore()); 
+                console.log("Firebase Initialized and Signed-in Successfully (v8 compat)");
             }).catch(error => console.error("Firebase sign-in failed", error));
         } catch (e) { 
             console.error("Firebase init failed.", e); 
@@ -262,8 +265,7 @@ const CommunityNews = ({ db }) => {
             return;
         }
         setLoading(true);
-        const q = query(collection(db, "articles"), orderBy("timestamp", "desc"));
-        const unsubscribe = onSnapshot(q, snapshot => {
+        const unsubscribe = db.collection("articles").orderBy("timestamp", "desc").onSnapshot(snapshot => {
             const publishedArticles = [];
             snapshot.forEach(doc => {
                 const data = doc.data();
@@ -534,16 +536,11 @@ const JournalistPortal = ({ db }) => {
     
     useEffect(() => {
         if (!db) return;
-        const q = query(collection(db, "applications"));
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            const appsData = [];
-            snapshot.forEach(doc => {
-                appsData.push({ ...doc.data(), id: doc.id });
-            });
-
+        const unsubscribe = db.collection("applications").onSnapshot((snapshot) => {
+            const appsData = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
             if (appsData.length === 0) {
                 const adminUser = { id: 'j-admin-01', name: 'Admin Journalist', affiliation: 'Chimera Core', reason: 'Initial member.', status: 'approved', approvals: 10, votedBy: [], denialReason: '' };
-                addDoc(collection(db, "applications"), adminUser);
+                db.collection("applications").add(adminUser);
                 setApplications([adminUser]);
             } else {
                 setApplications(appsData);
@@ -573,24 +570,24 @@ const JournalistPortal = ({ db }) => {
         if (!db) { alert("Database not connected. Please try again later."); return; }
         const newId = `j-${applicationData.name.toLowerCase().replace(/\s/g, '-')}-${Date.now() % 1000}`;
         const newApplication = { ...applicationData, id: newId, status: 'pending', approvals: 0, votedBy: [], denialReason: '' };
-        await addDoc(collection(db, "applications"), newApplication);
+        await db.collection("applications").add(newApplication);
         alert(`Your application has been submitted with ID: ${newId}. Please save this ID to check your status later.`);
         setView('login');
     };
 
     const handleVote = async (appId, voterId, isApproval, reason = '') => {
         if (!db) return;
-        const appRef = doc(db, "applications", appId);
+        const appRef = db.collection("applications").doc(appId);
         const appToUpdate = applications.find(app => app.id === appId);
         if (!appToUpdate || (appToUpdate.votedBy && appToUpdate.votedBy.includes(voterId))) return;
         const currentVotedBy = appToUpdate.votedBy || [];
         if (isApproval) {
             const newApprovals = (appToUpdate.approvals || 0) + 1;
             const newStatus = newApprovals >= 10 ? 'approved' : 'pending';
-            await updateDoc(appRef, { approvals: newApprovals, status: newStatus, votedBy: [...currentVotedBy, voterId] });
+            await appRef.update({ approvals: newApprovals, status: newStatus, votedBy: [...currentVotedBy, voterId] });
             if(newStatus === 'approved') alert(`${appToUpdate.name} has been approved!`);
         } else {
-            await updateDoc(appRef, { status: 'denied', votedBy: [...currentVotedBy, voterId], denialReason: reason });
+            await appRef.update({ status: 'denied', votedBy: [...currentVotedBy, voterId], denialReason: reason });
             alert(`${appToUpdate.name} has been denied.`);
         }
     };
@@ -639,8 +636,7 @@ const PortalDashboard = ({ journalist, applications, onVote, onLogout, db }) => 
 
     useEffect(() => {
         if (!db) return;
-        const q = query(collection(db, "articles"), orderBy("timestamp", "desc"));
-        const unsubscribe = onSnapshot(q, snapshot => {
+        const unsubscribe = db.collection("articles").orderBy("timestamp", "desc").onSnapshot(snapshot => {
             setArticles(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })));
         });
         return () => unsubscribe();
@@ -654,22 +650,22 @@ const PortalDashboard = ({ journalist, applications, onVote, onLogout, db }) => 
             authorName: journalist.name,
             status: 'pending',
             approvals: [],
-            timestamp: serverTimestamp()
+            timestamp: firebase.firestore.FieldValue.serverTimestamp()
         };
-        await addDoc(collection(db, "articles"), newArticle);
+        await db.collection("articles").add(newArticle);
         setPortalView('review');
     };
 
     const handleArticleVote = async (articleId, isApproval) => {
         if (!db) return;
-        const articleRef = doc(db, "articles", articleId);
+        const articleRef = db.collection("articles").doc(articleId);
         const articleToUpdate = articles.find(art => art.id === articleId);
         if (!articleToUpdate || (articleToUpdate.approvals && articleToUpdate.approvals.includes(journalist.id))) return;
 
         const currentApprovals = articleToUpdate.approvals || [];
         const newApprovals = [...currentApprovals, journalist.id];
         const newStatus = newApprovals.length >= 5 ? 'published' : 'pending';
-        await updateDoc(articleRef, { approvals: newApprovals, status: newStatus });
+        await articleRef.update({ approvals: newApprovals, status: newStatus });
         if(newStatus === 'published') alert(`Article "${articleToUpdate.title}" has been published!`);
     };
 
@@ -798,10 +794,8 @@ const ChatWindow = ({ journalistId, source, db }) => {
     const chatId = [journalistId, source.id].sort().join('_');
     useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
     useEffect(() => {
-        if (!db || !db.collection) return;
-        const messagesCollection = collection(db, `chats/${chatId}/messages`);
-        const q = query(messagesCollection, orderBy("timestamp"));
-        const unsubscribe = onSnapshot(q, (querySnapshot) => {
+        if (!db) return;
+        const unsubscribe = db.collection(`chats/${chatId}/messages`).orderBy("timestamp").onSnapshot((querySnapshot) => {
             const msgs = [];
             querySnapshot.forEach((doc) => { msgs.push({ id: doc.id, ...doc.data() }); });
             setMessages(msgs);
@@ -812,8 +806,8 @@ const ChatWindow = ({ journalistId, source, db }) => {
     const handleSendMessage = async (e) => {
         e.preventDefault();
         if (newMessage.trim() === '') return;
-        const messageData = { text: newMessage, senderId: journalistId, timestamp: serverTimestamp() };
-        await addDoc(collection(db, `chats/${chatId}/messages`), messageData);
+        const messageData = { text: newMessage, senderId: journalistId, timestamp: firebase.firestore.FieldValue.serverTimestamp() };
+        await db.collection(`chats/${chatId}/messages`).add(messageData);
         setNewMessage('');
     };
 
