@@ -39,6 +39,9 @@ const FirebaseProvider = ({ children }) => {
             setAuth(authInstance);
             setDb(dbInstance);
 
+            // Seed database with default users and data if they don't exist
+            seedDatabase(dbInstance);
+
             const unsubscribe = onAuthStateChanged(authInstance, (currentUser) => {
                 if (currentUser) {
                     setUser(currentUser);
@@ -54,6 +57,48 @@ const FirebaseProvider = ({ children }) => {
             setLoading(false);
         }
     }, []);
+
+    const seedDatabase = async (dbInstance) => {
+        // Seed default journalist
+        const journalistRef = doc(dbInstance, 'journalists', 'default-journalist');
+        const journalistDoc = await getDoc(journalistRef);
+        if (!journalistDoc.exists()) {
+            await setDoc(journalistRef, {
+                loginId: 'johndoe', name: 'John Doe', affiliation: 'Default News',
+                reason: 'Default account for demonstration.', status: 'approved',
+                createdAt: serverTimestamp(), approvals: [], votedBy: []
+            });
+            console.log("Default journalist seeded.");
+        }
+
+        // Seed default HRD
+        const hrdRef = doc(dbInstance, 'hrds', 'default-hrd');
+        const hrdDoc = await getDoc(hrdRef);
+        if (!hrdDoc.exists()) {
+            await setDoc(hrdRef, {
+                loginId: 'janedoe', name: 'Jane Doe', affiliation: 'Default Rights Group',
+                reason: 'Default account for demonstration.', status: 'approved',
+                createdAt: serverTimestamp(), approvals: [], votedBy: []
+            });
+            console.log("Default HRD seeded.");
+        }
+        
+        // Seed sample article
+        const articlesQuery = query(collection(dbInstance, 'articles'), where("title", "==", "Breaking News: A New Dawn"));
+        const articlesSnapshot = await getDocs(articlesQuery);
+        if (articlesSnapshot.empty) {
+            await addDoc(collection(dbInstance, 'articles'), {
+                title: "Breaking News: A New Dawn",
+                content: "This is a sample article to demonstrate the community news feature. It has been pre-approved and published.",
+                authorId: 'default-journalist',
+                authorName: 'John Doe',
+                status: 'published',
+                approvals: ['default-hrd'],
+                timestamp: serverTimestamp()
+            });
+            console.log("Sample article seeded.");
+        }
+    };
 
     const value = { auth, db, user, loading };
 
