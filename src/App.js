@@ -1,5 +1,5 @@
 import React, { useState, useEffect, createContext, useContext, useRef } from 'react';
-import { Shield, UploadCloud, Cpu, Wifi, Bot, AlertTriangle, CheckCircle, X, Loader2, Info, PlusCircle, Trash2, Newspaper, UserCheck, LogOut, Briefcase, Check, LogIn, MessageSquare, Link, BookLock, Save, Folder, File, ListTodo, Lock, Edit } from 'lucide-react';
+import { Shield, UploadCloud, Cpu, Wifi, Bot, AlertTriangle, CheckCircle, X, Loader2, Info, PlusCircle, Trash2, Newspaper, UserCheck, LogOut, Briefcase, Check, LogIn, MessageSquare, Link, BookLock, Save, Folder, File, ListTodo, Lock, Edit, Sparkles } from 'lucide-react';
 
 // --- Firebase Imports (Using modern v9+ modular SDK) ---
 import { initializeApp } from 'firebase/app';
@@ -39,6 +39,51 @@ const firebaseConfig = {
   appId: "1:178975469028:web:fe72c902fb4b321a082bf1",
 };
 
+// --- Gemini API Helper ---
+const callGeminiAPI = async (prompt, maxRetries = 3) => {
+    const apiKey = ""; // This will be handled by the environment.
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+    
+    const payload = {
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+    };
+
+    let attempt = 0;
+    while (attempt < maxRetries) {
+        try {
+            const response = await fetch(apiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const result = await response.json();
+            
+            if (result.candidates && result.candidates.length > 0 &&
+                result.candidates[0].content && result.candidates[0].content.parts &&
+                result.candidates[0].content.parts.length > 0) {
+                return result.candidates[0].content.parts[0].text;
+            } else {
+                throw new Error("Invalid response structure from Gemini API");
+            }
+        } catch (error) {
+            console.error(`Gemini API call failed on attempt ${attempt + 1}:`, error);
+            attempt++;
+            if (attempt >= maxRetries) {
+                throw new Error("Gemini API call failed after multiple retries.");
+            }
+            // Exponential backoff
+            const delay = Math.pow(2, attempt) * 1000;
+            await new Promise(resolve => setTimeout(resolve, delay));
+        }
+    }
+};
+
+
 // --- Firebase Context for global state management ---
 const FirebaseContext = createContext(null);
 const useFirebase = () => useContext(FirebaseContext);
@@ -50,6 +95,7 @@ const FirebaseProvider = ({ children }) => {
     const [user, setUser] = useState(null);
     const [userData, setUserData] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [isAuthReady, setIsAuthReady] = useState(false);
 
     useEffect(() => {
         try {
@@ -72,11 +118,18 @@ const FirebaseProvider = ({ children }) => {
                         } else {
                             setUserData(null);
                         }
+                        setIsAuthReady(true);
+                        setLoading(false);
+                    }, (error) => {
+                        console.error("Error fetching user data:", error);
+                        setUserData(null);
+                        setIsAuthReady(true);
                         setLoading(false);
                     });
                     return () => unsubUser();
                 } else {
                     setUserData(null);
+                    setIsAuthReady(true);
                     setLoading(false);
                 }
             });
@@ -88,7 +141,7 @@ const FirebaseProvider = ({ children }) => {
         }
     }, []);
 
-    const value = { auth, db, storage, user, userData, loading };
+    const value = { auth, db, storage, user, userData, loading, isAuthReady };
 
     return (
         <FirebaseContext.Provider value={value}>
@@ -121,7 +174,7 @@ function AppWrapper() {
 }
 
 function App() {
-  const { user, userData, loading } = useFirebase();
+  const { user, loading, isAuthReady } = useFirebase();
   const [activeView, setActiveView] = useState('fact-checker');
   const [activeId, setActiveId] = useState(null);
 
@@ -148,7 +201,7 @@ function App() {
     setActiveView(view);
   }
 
-  if (loading) {
+  if (loading || !isAuthReady) {
       return <div className="w-screen h-screen flex items-center justify-center bg-gray-900 text-cyan-400"><Loader2 size={48} className="animate-spin" /></div>;
   }
 
@@ -166,12 +219,17 @@ function App() {
         <main className="flex-grow p-4 md:p-8 flex items-start justify-center overflow-y-auto">
           <ErrorBoundary key={activeView + activeId}>
             {activeView === 'news' && <CommunityNews onArticleSelect={(id) => handleSelect(id, 'articleView')} />}
+            {/* Journalist Views */}
             {activeView === 'journalist-portal' && <JournalistDashboard onNavigate={handleNavigate} onSelect={handleSelect} />}
-            {activeView === 'hrd-portal' && <HRDDashboard onCaseSelect={(id) => handleSelect(id, 'caseView')} onNewCase={() => setActiveView('newCase')} />}
+            {activeView === 'comms' && <ConversationManager />}
+            {activeView === 'vault' && <SecureVault />}
             {activeView === 'articleEditor' && <ArticleEditor articleId={activeId} onBack={() => handleNavigate('journalist-portal')} />}
-            {activeView === 'articleView' && <ArticleView articleId={activeId} onBack={() => handleNavigate(userData.role === 'journalist' ? 'journalist-portal' : 'news')} onEdit={(id) => handleNavigate('articleEditor', id)} />}
+            {activeView === 'articleView' && <ArticleView articleId={activeId} onBack={() => handleNavigate('journalist-portal')} onEdit={(id) => handleNavigate('articleEditor', id)} />}
+            {/* HRD Views */}
+            {activeView === 'hrd-portal' && <HRDDashboard onCaseSelect={(id) => handleSelect(id, 'caseView')} onNewCase={() => setActiveView('newCase')} />}
             {activeView === 'caseView' && <CaseView caseId={activeId} onBack={() => handleNavigate('hrd-portal')} />}
             {activeView === 'newCase' && <NewCase onBack={() => handleNavigate('hrd-portal')} />}
+            {/* General View */}
             {activeView === 'about' && <AboutProject />}
           </ErrorBoundary>
         </main>
@@ -209,7 +267,7 @@ const PublicSidebar = ({ activeView, setActiveView }) => (
             <NavItem icon={Wifi} label="System Status" view="status" activeView={activeView} onClick={() => setActiveView('status')} />
             <NavItem icon={Info} label="About the Project" view="about" activeView={activeView} onClick={() => setActiveView('about')} />
         </ul>
-        <div className="mt-auto text-center text-xs text-gray-500"><p>Version 4.0.0</p><p>Resilient. Secure. Open.</p></div>
+        <div className="mt-auto text-center text-xs text-gray-500"><p>Version 4.1.0</p><p>Resilient. Secure. Open.</p></div>
     </nav>
 );
 
@@ -218,15 +276,38 @@ const LoggedInSidebar = ({ activeView, setActiveView }) => {
     const handleSignOut = async () => {
         await firebaseSignOut(auth);
     };
+
     return (
         <nav className="w-64 bg-gray-900/80 border-r border-gray-700/50 flex-shrink-0 flex flex-col p-4">
             <div className="flex items-center space-x-3 mb-10 px-2"><Shield className="text-cyan-400" size={32} /><h1 className="text-xl font-bold tracking-wider text-gray-50">Chimera</h1></div>
-            <ul className="space-y-2 flex-grow">
+            
+            <ul className="space-y-1 flex-grow">
+                {/* General Section */}
                 <NavItem icon={Newspaper} label="Verified News" view="news" activeView={activeView} onClick={() => setActiveView('news')} />
-                {userData?.role === 'journalist' && <NavItem icon={UserCheck} label="Journalist Portal" view="journalist-portal" activeView={activeView} onClick={() => setActiveView('journalist-portal')} />}
-                {userData?.role === 'hrd' && <NavItem icon={Briefcase} label="HRD Portal" view="hrd-portal" activeView={activeView} onClick={() => setActiveView('hrd-portal')} />}
-                <NavItem icon={Info} label="About the Project" view="about" activeView={activeView} onClick={() => setActiveView('about')} />
+
+                {/* Journalist Section */}
+                {userData?.role === 'journalist' && (
+                    <>
+                        <li className="px-3 pt-4 pb-2 text-xs font-bold text-gray-500 uppercase tracking-wider">Journalist Tools</li>
+                        <NavItem icon={Folder} label="Projects" view="journalist-portal" activeView={activeView} onClick={() => setActiveView('journalist-portal')} />
+                        <NavItem icon={MessageSquare} label="Secure Comms" view="comms" activeView={activeView} onClick={() => setActiveView('comms')} />
+                        <NavItem icon={BookLock} label="Secure Vault" view="vault" activeView={activeView} onClick={() => setActiveView('vault')} />
+                    </>
+                )}
+
+                {/* HRD Section */}
+                {userData?.role === 'hrd' && (
+                     <>
+                        <li className="px-3 pt-4 pb-2 text-xs font-bold text-gray-500 uppercase tracking-wider">HRD Tools</li>
+                        <NavItem icon={Briefcase} label="Case Dashboard" view="hrd-portal" activeView={activeView} onClick={() => setActiveView('hrd-portal')} />
+                     </>
+                )}
+                
+                {/* Project Info Section */}
+                <li className="px-3 pt-4 pb-2 text-xs font-bold text-gray-500 uppercase tracking-wider">Project</li>
+                <NavItem icon={Info} label="About Chimera" view="about" activeView={activeView} onClick={() => setActiveView('about')} />
             </ul>
+
             <div className="mt-auto">
                 <NavItem icon={LogOut} label="Sign Out" view="logout" activeView={activeView} onClick={handleSignOut} />
             </div>
@@ -513,19 +594,22 @@ const JournalistDashboard = ({ onNavigate, onSelect }) => {
 };
 
 const ProjectManagement = ({ onNavigate, onSelect }) => {
-    const { db, user } = useFirebase();
+    const { db, user, isAuthReady } = useFirebase();
     const [projects, setProjects] = useState([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        if (!user || !db) return;
+        if (!isAuthReady || !user || !db) return;
         const q = query(collection(db, 'projects'), where('authorUid', '==', user.uid), orderBy('createdAt', 'desc'));
         const unsubscribe = onSnapshot(q, snap => {
             setProjects(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
             setLoading(false);
+        }, err => {
+            console.error(err);
+            setLoading(false);
         });
         return unsubscribe;
-    }, [user, db]);
+    }, [isAuthReady, user, db]);
 
     const handleNewProject = async () => {
         const title = prompt("New project title:");
@@ -562,27 +646,32 @@ const ProjectManagement = ({ onNavigate, onSelect }) => {
 };
 
 const ArticleManagement = ({ onNewArticle, onArticleSelect }) => {
-    const { db, user } = useFirebase();
+    const { db, user, isAuthReady } = useFirebase();
     const [myArticles, setMyArticles] = useState([]);
     const [pendingArticles, setPendingArticles] = useState([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        if (!user || !db) return;
+        if (!isAuthReady || !user || !db) return;
         
-        const myArticlesQuery = query(collection(db, 'articles'), where('authorUid', '==', user.uid), orderBy('createdAt', 'desc'));
+        const myArticlesQuery = query(collection(db, 'articles'), where('authorUid', '==', user.uid));
         const unsubMy = onSnapshot(myArticlesQuery, (snap) => {
-            setMyArticles(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+            const articles = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            articles.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+            setMyArticles(articles);
+            setLoading(false);
+        }, err => {
+            console.error(err);
             setLoading(false);
         });
 
         const pendingQuery = query(collection(db, 'articles'), where('status', '==', 'pending_approval'));
         const unsubPending = onSnapshot(pendingQuery, (snap) => {
             setPendingArticles(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })).filter(art => art.authorUid !== user.uid));
-        });
+        }, err => console.error(err));
 
         return () => { unsubMy(); unsubPending(); };
-    }, [user, db]);
+    }, [isAuthReady, user, db]);
 
     const getStatusChip = (status) => {
         const styles = {
@@ -641,6 +730,9 @@ const ArticleView = ({ articleId, onBack, onEdit }) => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [isApproving, setIsApproving] = useState(false);
+    const [showSummaryModal, setShowSummaryModal] = useState(false);
+    const [summary, setSummary] = useState('');
+    const [isSummarizing, setIsSummarizing] = useState(false);
 
     useEffect(() => {
         if (!db || !articleId) return;
@@ -675,6 +767,20 @@ const ArticleView = ({ articleId, onBack, onEdit }) => {
         }
     };
     
+    const handleSummarize = async () => {
+        setShowSummaryModal(true);
+        setIsSummarizing(true);
+        try {
+            const prompt = `Summarize the following article in three key bullet points:\n\n${article.content}`;
+            const result = await callGeminiAPI(prompt);
+            setSummary(result);
+        } catch (err) {
+            setSummary("Failed to generate summary. Please try again.");
+            console.error(err);
+        }
+        setIsSummarizing(false);
+    };
+
     if (loading) return <Loader2 className="animate-spin text-cyan-400" size={48} />;
     if (!article) return <p className="text-red-400">{error?.message || "Could not load article."}</p>;
 
@@ -682,10 +788,16 @@ const ArticleView = ({ articleId, onBack, onEdit }) => {
     const canApprove = userData.role === 'journalist' && !isAuthor && article.status === 'pending_approval' && !(article.approvals?.includes(user.uid));
 
     return (
+        <>
         <div className="w-full max-w-4xl p-4">
             <button onClick={onBack} className="mb-6 text-cyan-400 hover:underline">&larr; Back</button>
             <div className="bg-gray-800/50 p-8 rounded-lg shadow-lg border border-gray-700/50">
-                <h1 className="text-4xl font-extrabold text-white mb-4">{article.title}</h1>
+                <div className="flex justify-between items-start">
+                    <h1 className="text-4xl font-extrabold text-white mb-4">{article.title}</h1>
+                    <button onClick={handleSummarize} className="flex items-center gap-2 bg-purple-600 text-white font-bold py-2 px-3 rounded-lg hover:bg-purple-700 transition-colors text-sm">
+                        <Sparkles size={16} /> ✨ AI Summary
+                    </button>
+                </div>
                 <div className="flex justify-between items-center text-sm text-gray-400 mb-6 border-b border-gray-700 pb-4">
                     <span>By {article.authorName}</span>
                     <span>{article.createdAt?.toDate().toLocaleDateString()}</span>
@@ -705,6 +817,22 @@ const ArticleView = ({ articleId, onBack, onEdit }) => {
             </div>
             {error && <ErrorModal error={error} onClose={() => setError(null)} />}
         </div>
+        {showSummaryModal && (
+            <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 animate-fade-in">
+                <div className="bg-gray-800 rounded-lg shadow-2xl p-8 max-w-2xl w-full mx-4 border border-purple-500/50">
+                    <div className="flex items-center justify-between mb-4">
+                        <h2 className="text-2xl font-bold text-purple-300 flex items-center gap-2"><Sparkles size={24}/> AI-Generated Summary</h2>
+                        <button onClick={() => setShowSummaryModal(false)} className="p-1 rounded-full hover:bg-gray-700"><X /></button>
+                    </div>
+                    {isSummarizing ? (
+                        <div className="flex justify-center items-center h-48"><Loader2 className="animate-spin text-purple-400" size={48} /></div>
+                    ) : (
+                        <div className="text-gray-300 whitespace-pre-wrap prose prose-invert max-w-none">{summary}</div>
+                    )}
+                </div>
+            </div>
+        )}
+        </>
     );
 };
 
@@ -1082,19 +1210,24 @@ const SecureVault = () => {
 // --- HRD PORTAL ---
 
 const HRDDashboard = ({ onCaseSelect, onNewCase }) => {
-    const { db, user } = useFirebase();
+    const { db, user, isAuthReady } = useFirebase();
     const [cases, setCases] = useState([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        if (!user || !db) return;
-        const q = query(collection(db, 'cases'), where('assignedToUid', '==', user.uid), orderBy('lastUpdatedAt', 'desc'));
+        if (!isAuthReady || !user || !db) return;
+        const q = query(collection(db, 'cases'), where('assignedToUid', '==', user.uid));
         const unsubscribe = onSnapshot(q, (snap) => {
-            setCases(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+            const caseData = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            caseData.sort((a, b) => (b.lastUpdatedAt?.seconds || 0) - (a.lastUpdatedAt?.seconds || 0));
+            setCases(caseData);
+            setLoading(false);
+        }, err => {
+            console.error(err);
             setLoading(false);
         });
         return () => unsubscribe();
-    }, [user, db]);
+    }, [isAuthReady, user, db]);
     
     const getStatusChip = (status) => {
         const styles = {
@@ -1170,6 +1303,9 @@ const CaseView = ({ caseId, onBack }) => {
     const [caseData, setCaseData] = useState(null);
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState('details');
+    const [showAnalysisModal, setShowAnalysisModal] = useState(false);
+    const [analysis, setAnalysis] = useState('');
+    const [isAnalyzing, setIsAnalyzing] = useState(false);
 
     useEffect(() => {
         const caseRef = doc(db, 'cases', caseId);
@@ -1179,6 +1315,22 @@ const CaseView = ({ caseId, onBack }) => {
         });
         return unsubscribe;
     }, [db, caseId]);
+    
+    const handleAnalyze = async () => {
+        setShowAnalysisModal(true);
+        setIsAnalyzing(true);
+        try {
+            // In a real app, you'd fetch text from evidence files. Here we'll just use the description.
+            const prompt = `Analyze the following human rights case description. Identify key entities (people, places, organizations), create a potential timeline of events, and suggest three concrete next steps for the case worker. Format the output with clear headings for "Key Entities", "Potential Timeline", and "Suggested Next Steps".\n\nCase Description:\n${caseData.description}`;
+            const result = await callGeminiAPI(prompt);
+            setAnalysis(result);
+        } catch (err) {
+            setAnalysis("Failed to generate analysis. Please try again.");
+            console.error(err);
+        }
+        setIsAnalyzing(false);
+    };
+
 
     if (loading) return <Loader2 className="animate-spin text-cyan-400" size={48} />;
     if (!caseData) return <p className="text-red-400">Could not load case.</p>;
@@ -1190,10 +1342,18 @@ const CaseView = ({ caseId, onBack }) => {
     );
 
     return (
+        <>
         <div className="w-full max-w-5xl p-4">
             <button onClick={onBack} className="mb-6 text-cyan-400 hover:underline">&larr; Back to Dashboard</button>
-            <h1 className="text-3xl font-bold text-white mb-2">{caseData.caseTitle}</h1>
-            <p className="text-gray-400 mb-6">Case ID: {caseData.caseId}</p>
+            <div className="flex justify-between items-start">
+                <div>
+                    <h1 className="text-3xl font-bold text-white mb-2">{caseData.caseTitle}</h1>
+                    <p className="text-gray-400 mb-6">Case ID: {caseData.caseId}</p>
+                </div>
+                <button onClick={handleAnalyze} className="flex items-center gap-2 bg-purple-600 text-white font-bold py-2 px-3 rounded-lg hover:bg-purple-700 transition-colors text-sm">
+                    <Sparkles size={16} /> ✨ Analyze with AI
+                </button>
+            </div>
             <div className="border-b border-gray-700 flex mb-6">
                 <TabButton view="details" label="Details" icon={Info} />
                 <TabButton view="evidence" label="Evidence Locker" icon={Lock} />
@@ -1207,6 +1367,22 @@ const CaseView = ({ caseId, onBack }) => {
                 {activeTab === 'chat' && <CaseChat caseId={caseId} />}
             </div>
         </div>
+        {showAnalysisModal && (
+            <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 animate-fade-in">
+                <div className="bg-gray-800 rounded-lg shadow-2xl p-8 max-w-2xl w-full mx-4 border border-purple-500/50">
+                    <div className="flex items-center justify-between mb-4">
+                        <h2 className="text-2xl font-bold text-purple-300 flex items-center gap-2"><Sparkles size={24}/> AI-Generated Case Analysis</h2>
+                        <button onClick={() => setShowAnalysisModal(false)} className="p-1 rounded-full hover:bg-gray-700"><X /></button>
+                    </div>
+                    {isAnalyzing ? (
+                        <div className="flex justify-center items-center h-48"><Loader2 className="animate-spin text-purple-400" size={48} /></div>
+                    ) : (
+                        <div className="text-gray-300 whitespace-pre-wrap prose prose-invert max-w-none">{analysis}</div>
+                    )}
+                </div>
+            </div>
+        )}
+        </>
     );
 };
 
@@ -1499,7 +1675,7 @@ const ErrorModal = ({ error, onClose }) => {
                 break;
             case 'permission-denied': 
                 message = 'Permission Denied.'; 
-                solution = 'You do not have the necessary permissions for this action. This could be due to Firestore security rules. Check the console for more details.'; 
+                solution = 'You do not have the necessary permissions for this action. This is likely due to Firestore security rules. Please check the Firestore rules in your Firebase console to ensure the logged-in user has permission to perform this query.'; 
                 break;
             case 'unavailable':
                 message = 'Service Unavailable';
