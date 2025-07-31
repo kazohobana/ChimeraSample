@@ -1,5 +1,5 @@
 import React, { useState, useEffect, createContext, useContext, useRef } from 'react';
-import { Shield, UploadCloud, Cpu, Wifi, Bot, AlertTriangle, CheckCircle, X, Loader2, Info, PlusCircle, Trash2, Newspaper, UserCheck, LogOut, Briefcase, Check, LogIn, MessageSquare, Link, BookLock, Save, Folder, File, ListTodo, Lock, Edit, Sparkles, Gauge, Gavel, SearchCode, BarChart, Siren } from 'lucide-react';
+import { Shield, UploadCloud, Cpu, Wifi, Bot, AlertTriangle, CheckCircle, X, Loader2, Info, PlusCircle, Trash2, Newspaper, UserCheck, LogOut, Briefcase, Check, LogIn, MessageSquare, Link, BookLock, Save, Folder, File, ListTodo, Lock, Edit, Sparkles, Gauge, Gavel, SearchCode, BarChart, Siren, Archive } from 'lucide-react';
 
 // --- Firebase Imports (Using modern v9+ modular SDK) ---
 import { initializeApp } from 'firebase/app';
@@ -60,6 +60,7 @@ const CONSTANTS = {
         NEW_CASE: 'newCase',
         RISK_ANALYSIS: 'risk-analysis',
         LEGAL_AI: 'legal-ai',
+        CASE_VAULT: 'case-vault',
     },
     COLLECTIONS: {
         USERS: 'users',
@@ -314,6 +315,7 @@ function App() {
         case CONSTANTS.VIEWS.NEW_CASE: return <NewCase onBack={() => handleNavigate(CONSTANTS.VIEWS.HRD_PORTAL)} />;
         case CONSTANTS.VIEWS.RISK_ANALYSIS: return <RiskAnalysisDashboard />;
         case CONSTANTS.VIEWS.LEGAL_AI: return <LegalAidAI />;
+        case CONSTANTS.VIEWS.CASE_VAULT: return <CaseVault onCaseSelect={(id) => handleNavigate(CONSTANTS.VIEWS.CASE_VIEW, id)} onBack={() => handleNavigate(CONSTANTS.VIEWS.HRD_PORTAL)} />;
 
         default:
             // Default to the user's main dashboard
@@ -413,6 +415,7 @@ const LoggedInSidebar = ({ activeView, setActiveView }) => {
                     <>
                         <li className="px-3 pt-4 pb-2 text-xs font-bold text-gray-500 uppercase tracking-wider">HRD Tools</li>
                         <NavItem icon={Briefcase} label="Case Dashboard" view={CONSTANTS.VIEWS.HRD_PORTAL} activeView={activeView} onClick={() => setActiveView(CONSTANTS.VIEWS.HRD_PORTAL)} />
+                        <NavItem icon={Archive} label="Case Vault" view={CONSTANTS.VIEWS.CASE_VAULT} activeView={activeView} onClick={() => setActiveView(CONSTANTS.VIEWS.CASE_VAULT)} />
                         
                         <li className="px-3 pt-4 pb-2 text-xs font-bold text-purple-400 uppercase tracking-wider">Assistance Suite</li>
                         <NavItem icon={Gauge} label="Risk Analysis" view={CONSTANTS.VIEWS.RISK_ANALYSIS} activeView={activeView} onClick={() => setActiveView(CONSTANTS.VIEWS.RISK_ANALYSIS)} />
@@ -1529,6 +1532,7 @@ const CaseView = ({ caseId, onBack }) => {
     const [showAnalysisModal, setShowAnalysisModal] = useState(false);
     const [analysis, setAnalysis] = useState('');
     const [isAnalyzing, setIsAnalyzing] = useState(false);
+    const [isClosing, setIsClosing] = useState(false);
 
     useEffect(() => {
         const caseRef = doc(db, CONSTANTS.COLLECTIONS.CASES, caseId);
@@ -1538,12 +1542,29 @@ const CaseView = ({ caseId, onBack }) => {
         });
         return unsubscribe;
     }, [db, caseId]);
+
+    const handleCloseCase = async () => {
+        if (window.confirm("Are you sure you want to close this case? It will be moved to the vault.")) {
+            setIsClosing(true);
+            try {
+                const caseRef = doc(db, CONSTANTS.COLLECTIONS.CASES, caseId);
+                await updateDoc(caseRef, {
+                    status: 'closed',
+                    lastUpdatedAt: serverTimestamp()
+                });
+                onBack();
+            } catch (err) {
+                console.error("Failed to close case:", err);
+                // In a real app, show an error modal
+            }
+            setIsClosing(false);
+        }
+    };
     
     const handleAnalyze = async () => {
         setShowAnalysisModal(true);
         setIsAnalyzing(true);
         try {
-            // In a real app, you'd fetch text from evidence files. Here we'll just use the description.
             const prompt = `Analyze the following human rights case description. Identify key entities (people, places, organizations), create a potential timeline of events, and suggest three concrete next steps for the case worker. Format the output with clear headings for "Key Entities", "Potential Timeline", and "Suggested Next Steps".\n\nCase Description:\n${caseData.description}`;
             const result = await callGeminiAPI(prompt);
             setAnalysis(result);
@@ -1568,14 +1589,22 @@ const CaseView = ({ caseId, onBack }) => {
         <>
         <div className="w-full max-w-5xl p-4">
             <button onClick={onBack} className="mb-6 text-cyan-400 hover:underline">&larr; Back to Dashboard</button>
-            <div className="flex justify-between items-start">
+            <div className="flex justify-between items-start mb-6">
                 <div>
                     <h1 className="text-3xl font-bold text-white mb-2">{caseData.caseTitle}</h1>
-                    <p className="text-gray-400 mb-6">Case ID: {caseData.caseId}</p>
+                    <p className="text-gray-400">Case ID: {caseData.caseId}</p>
                 </div>
-                <button onClick={handleAnalyze} className="flex items-center gap-2 bg-purple-600 text-white font-bold py-2 px-3 rounded-lg hover:bg-purple-700 transition-colors text-sm">
-                    <Sparkles size={16} /> ✨ Analyze with AI
-                </button>
+                <div className="flex items-center gap-2">
+                    <button onClick={handleAnalyze} className="flex items-center gap-2 bg-purple-600 text-white font-bold py-2 px-3 rounded-lg hover:bg-purple-700 transition-colors text-sm">
+                        <Sparkles size={16} /> ✨ Analyze with AI
+                    </button>
+                    {caseData.status !== 'closed' && (
+                        <button onClick={handleCloseCase} disabled={isClosing} className="flex items-center gap-2 bg-gray-600 text-white font-bold py-2 px-3 rounded-lg hover:bg-gray-700 transition-colors text-sm disabled:bg-gray-500">
+                            {isClosing ? <Loader2 className="animate-spin" size={16}/> : <Archive size={16} />}
+                            {isClosing ? 'Archiving...' : 'Close & Archive Case'}
+                        </button>
+                    )}
+                </div>
             </div>
             <div className="border-b border-gray-700 flex mb-6">
                 <TabButton view="details" label="Details" icon={Info} />
