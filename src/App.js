@@ -1,5 +1,5 @@
 import React, { useState, useEffect, createContext, useContext, useRef } from 'react';
-import { Shield, UploadCloud, Cpu, Wifi, Bot, AlertTriangle, CheckCircle, X, Loader2, Info, PlusCircle, Trash2, Newspaper, UserCheck, LogOut, Briefcase, Check, LogIn, MessageSquare, Link, BookLock, Save, Folder, File, ListTodo, Lock, Edit, Sparkles, Gauge, Gavel, SearchCode, BarChart, Siren, Archive, MapPin, Clock, Mic, Languages, ShieldAlert, Timer, Settings } from 'lucide-react';
+import { Shield, UploadCloud, Cpu, Wifi, Bot, AlertTriangle, CheckCircle, X, Loader2, Info, PlusCircle, Trash2, Newspaper, UserCheck, LogOut, Briefcase, Check, LogIn, MessageSquare, Link, BookLock, Save, Folder, File, ListTodo, Lock, Edit, Sparkles, Gauge, Gavel, SearchCode, BarChart, Siren, Archive, MapPin, Clock, Mic, Languages, ShieldAlert, Timer, Settings, FileText, Globe, KeyRound } from 'lucide-react';
 
 // --- Firebase Imports (Using modern v9+ modular SDK) ---
 import { initializeApp } from 'firebase/app';
@@ -30,7 +30,6 @@ import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from 'fire
 
 
 // --- App Constants ---
-// It's best practice to keep constants in a separate file (e.g., `constants.js`)
 const CONSTANTS = {
     ROLES: {
         JOURNALIST: 'journalist',
@@ -257,89 +256,114 @@ function AppWrapper() {
 }
 
 function App() {
-  const { user, loading, userData, isAuthReady } = useFirebase();
-  const [activeView, setActiveView] = useState(CONSTANTS.VIEWS.FACT_CHECKER);
-  const [activeId, setActiveId] = useState(null);
+ const { user, loading, userData, isAuthReady } = useFirebase();
+ const [activeView, setActiveView] = useState(CONSTANTS.VIEWS.FACT_CHECKER);
+ const [activeId, setActiveId] = useState(null);
+ const [modal, setModal] = useState({ isOpen: false, title: '', message: '', onConfirm: null });
 
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const chatId = params.get('chatId');
-    const caseChatId = params.get('caseChatId');
-    if (chatId) {
-        setActiveView(CONSTANTS.VIEWS.CHAT_INVITE);
-        setActiveId(chatId);
-    } else if (caseChatId) {
-        setActiveView(CONSTANTS.VIEWS.CASE_CHAT_INVITE);
-        setActiveId(caseChatId);
+ useEffect(() => {
+  const params = new URLSearchParams(window.location.search);
+  const chatId = params.get('chatId');
+  const caseChatId = params.get('caseChatId');
+  if (chatId) {
+   setActiveView(CONSTANTS.VIEWS.CHAT_INVITE);
+   setActiveId(chatId);
+  } else if (caseChatId) {
+   setActiveView(CONSTANTS.VIEWS.CASE_CHAT_INVITE);
+   setActiveId(caseChatId);
+  }
+ }, []);
+
+ const handleNavigate = (view, id = null) => {
+  setActiveView(view);
+  setActiveId(id);
+  window.scrollTo(0, 0); // Scroll to top on view change
+ }
+
+ const showModal = (title, message, onConfirm = null) => {
+    setModal({ isOpen: true, title, message, onConfirm });
+ };
+
+ const closeModal = () => {
+    setModal({ isOpen: false, title: '', message: '', onConfirm: null });
+ };
+
+ const handleConfirm = () => {
+    if (modal.onConfirm) {
+        modal.onConfirm();
     }
-  }, []);
+    closeModal();
+ };
 
-  const handleNavigate = (view, id = null) => {
-    setActiveView(view);
-    setActiveId(id);
-    window.scrollTo(0, 0); // Scroll to top on view change
+
+ if (loading || !isAuthReady) {
+   return <div className="w-screen h-screen flex items-center justify-center bg-gray-900 text-cyan-400"><Loader2 size={48} className="animate-spin" /></div>;
+ }
+
+ // --- Anonymous/Public Views ---
+ if (activeView === CONSTANTS.VIEWS.CHAT_INVITE) return <ChatInviteHandler chatId={activeId} />;
+ if (activeView === CONSTANTS.VIEWS.CASE_CHAT_INVITE) return <CaseChatInviteHandler caseChatId={activeId} />;
+ 
+ if (!user) {
+   return <PublicLayout activeView={activeView} setActiveView={handleNavigate} />;
+ }
+ 
+ // --- Authenticated Views ---
+ const renderActiveView = () => {
+  // A switch statement is often cleaner for routing logic
+  switch (activeView) {
+   // General
+   case CONSTANTS.VIEWS.NEWS: return <CommunityNews onArticleSelect={(id) => handleNavigate(CONSTANTS.VIEWS.ARTICLE_VIEW, id)} />;
+   case CONSTANTS.VIEWS.ABOUT: return <AboutProject />;
+   
+   // Journalist
+   case CONSTANTS.VIEWS.JOURNALIST_PORTAL: return <JournalistDashboard onNavigate={handleNavigate} />;
+   case CONSTANTS.VIEWS.COMMS: return <ConversationManager showModal={showModal}/>;
+   case CONSTANTS.VIEWS.VAULT: return <SecureVault showModal={showModal} />;
+   case CONSTANTS.VIEWS.ARTICLE_EDITOR: return <ArticleEditor articleId={activeId} onBack={() => handleNavigate(CONSTANTS.VIEWS.JOURNALIST_PORTAL)} />;
+   case CONSTANTS.VIEWS.ARTICLE_VIEW: return <ArticleView articleId={activeId} onBack={() => handleNavigate(CONSTANTS.VIEWS.JOURNALIST_PORTAL)} onEdit={(id) => handleNavigate(CONSTANTS.VIEWS.ARTICLE_EDITOR, id)} showModal={showModal} />;
+   case CONSTANTS.VIEWS.THREAT_INTEL: return <ThreatIntelDashboard />;
+   case CONSTANTS.VIEWS.SOURCE_VETTING: return <SourceVettingDashboard />;
+   case CONSTANTS.VIEWS.DATA_STUDIO: return <DataStudio />;
+   
+   // HRD
+   case CONSTANTS.VIEWS.HRD_PORTAL: return <HRDDashboard onNavigate={handleNavigate} />;
+   case CONSTANTS.VIEWS.CASE_VIEW: return <CaseView caseId={activeId} onBack={() => handleNavigate(CONSTANTS.VIEWS.HRD_PORTAL)} showModal={showModal} />;
+   case CONSTANTS.VIEWS.NEW_CASE: return <NewCase onBack={() => handleNavigate(CONSTANTS.VIEWS.HRD_PORTAL)} />;
+   case CONSTANTS.VIEWS.RISK_ANALYSIS: return <RiskAnalysisDashboard />;
+   case CONSTANTS.VIEWS.LEGAL_AI: return <LegalAidAI />;
+   case CONSTANTS.VIEWS.CASE_VAULT: return <CaseVault onCaseSelect={(id) => handleNavigate(CONSTANTS.VIEWS.CASE_VIEW, id)} onBack={() => handleNavigate(CONSTANTS.VIEWS.HRD_PORTAL)} />;
+   case CONSTANTS.VIEWS.PERSONAL_SECURITY: return <PersonalSecurityDashboard />;
+
+   default:
+    // Default to the user's main dashboard
+    if (userData?.role === CONSTANTS.ROLES.JOURNALIST) return <JournalistDashboard onNavigate={handleNavigate} />;
+    if (userData?.role === CONSTANTS.ROLES.HRD) return <HRDDashboard onNavigate={handleNavigate} />;
+    return <CommunityNews onArticleSelect={(id) => handleNavigate(CONSTANTS.VIEWS.ARTICLE_VIEW, id)} />;
   }
+ };
 
-  if (loading || !isAuthReady) {
-      return <div className="w-screen h-screen flex items-center justify-center bg-gray-900 text-cyan-400"><Loader2 size={48} className="animate-spin" /></div>;
-  }
-
-  // --- Anonymous/Public Views ---
-  if (activeView === CONSTANTS.VIEWS.CHAT_INVITE) return <ChatInviteHandler chatId={activeId} />;
-  if (activeView === CONSTANTS.VIEWS.CASE_CHAT_INVITE) return <CaseChatInviteHandler caseChatId={activeId} />;
-  
-  if (!user) {
-      return <PublicLayout activeView={activeView} setActiveView={handleNavigate} />;
-  }
-  
-  // --- Authenticated Views ---
-  const renderActiveView = () => {
-    // A switch statement is often cleaner for routing logic
-    switch (activeView) {
-        // General
-        case CONSTANTS.VIEWS.NEWS: return <CommunityNews onArticleSelect={(id) => handleNavigate(CONSTANTS.VIEWS.ARTICLE_VIEW, id)} />;
-        case CONSTANTS.VIEWS.ABOUT: return <AboutProject />;
-        
-        // Journalist
-        case CONSTANTS.VIEWS.JOURNALIST_PORTAL: return <JournalistDashboard onNavigate={handleNavigate} />;
-        case CONSTANTS.VIEWS.COMMS: return <ConversationManager />;
-        case CONSTANTS.VIEWS.VAULT: return <SecureVault />;
-        case CONSTANTS.VIEWS.ARTICLE_EDITOR: return <ArticleEditor articleId={activeId} onBack={() => handleNavigate(CONSTANTS.VIEWS.JOURNALIST_PORTAL)} />;
-        case CONSTANTS.VIEWS.ARTICLE_VIEW: return <ArticleView articleId={activeId} onBack={() => handleNavigate(CONSTANTS.VIEWS.JOURNALIST_PORTAL)} onEdit={(id) => handleNavigate(CONSTANTS.VIEWS.ARTICLE_EDITOR, id)} />;
-        case CONSTANTS.VIEWS.THREAT_INTEL: return <ThreatIntelDashboard />;
-        case CONSTANTS.VIEWS.SOURCE_VETTING: return <SourceVettingDashboard />;
-        case CONSTANTS.VIEWS.DATA_STUDIO: return <DataStudio />;
-        
-        // HRD
-        case CONSTANTS.VIEWS.HRD_PORTAL: return <HRDDashboard onNavigate={handleNavigate} />;
-        case CONSTANTS.VIEWS.CASE_VIEW: return <CaseView caseId={activeId} onBack={() => handleNavigate(CONSTANTS.VIEWS.HRD_PORTAL)} />;
-        case CONSTANTS.VIEWS.NEW_CASE: return <NewCase onBack={() => handleNavigate(CONSTANTS.VIEWS.HRD_PORTAL)} />;
-        case CONSTANTS.VIEWS.RISK_ANALYSIS: return <RiskAnalysisDashboard />;
-        case CONSTANTS.VIEWS.LEGAL_AI: return <LegalAidAI />;
-        case CONSTANTS.VIEWS.CASE_VAULT: return <CaseVault onCaseSelect={(id) => handleNavigate(CONSTANTS.VIEWS.CASE_VIEW, id)} onBack={() => handleNavigate(CONSTANTS.VIEWS.HRD_PORTAL)} />;
-        case CONSTANTS.VIEWS.PERSONAL_SECURITY: return <PersonalSecurityDashboard />;
-
-        default:
-            // Default to the user's main dashboard
-            if (userData?.role === CONSTANTS.ROLES.JOURNALIST) return <JournalistDashboard onNavigate={handleNavigate} />;
-            if (userData?.role === CONSTANTS.ROLES.HRD) return <HRDDashboard onNavigate={handleNavigate} />;
-            return <CommunityNews onArticleSelect={(id) => handleNavigate(CONSTANTS.VIEWS.ARTICLE_VIEW, id)} />;
-    }
-  };
-
-  return (
-    <div className="bg-gray-900 text-gray-200 font-sans min-h-screen flex w-full h-screen">
-      <LoggedInSidebar activeView={activeView} setActiveView={handleNavigate} />
-      <div className="flex-1 flex flex-col h-screen">
-        <Header />
-        <main className="flex-grow p-4 md:p-8 flex items-start justify-center overflow-y-auto bg-grid">
-          <ErrorBoundary key={activeView + activeId}>
-            {renderActiveView()}
-          </ErrorBoundary>
-        </main>
-      </div>
-    </div>
-  );
+ return (
+  <div className="bg-gray-900 text-gray-200 font-sans min-h-screen flex w-full h-screen">
+   <LoggedInSidebar activeView={activeView} setActiveView={handleNavigate} />
+   <div className="flex-1 flex flex-col h-screen">
+    <Header showModal={showModal}/>
+    <main className="flex-grow p-4 md:p-8 flex items-start justify-center overflow-y-auto bg-grid">
+     <ErrorBoundary key={activeView + activeId}>
+      {renderActiveView()}
+     </ErrorBoundary>
+    </main>
+   </div>
+   {modal.isOpen && (
+     <Modal 
+       title={modal.title} 
+       message={modal.message} 
+       onClose={closeModal} 
+       onConfirm={modal.onConfirm ? handleConfirm : null} 
+     />
+   )}
+  </div>
+ );
 }
 
 
@@ -372,7 +396,7 @@ const PublicSidebar = ({ activeView, setActiveView }) => (
             <NavItem icon={Wifi} label="System Status" view={CONSTANTS.VIEWS.STATUS} activeView={activeView} onClick={() => setActiveView(CONSTANTS.VIEWS.STATUS)} />
             <NavItem icon={Info} label="About the Project" view={CONSTANTS.VIEWS.ABOUT} activeView={activeView} onClick={() => setActiveView(CONSTANTS.VIEWS.ABOUT)} />
         </ul>
-        <div className="mt-auto text-center text-xs text-gray-500"><p>Version 5.1.0</p><p>Resilient. Secure. Intelligent.</p></div>
+        <div className="mt-auto text-center text-xs text-gray-500"><p>Version 5.2.0</p><p>Resilient. Secure. Intelligent.</p></div>
     </nav>
 );
 
@@ -438,10 +462,10 @@ const LoggedInSidebar = ({ activeView, setActiveView }) => {
 };
 
 const NavItem = ({ icon: Icon, label, view, activeView, onClick }) => (
-  <li><button onClick={onClick} className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors text-left ${activeView === view ? 'bg-cyan-600/20 text-cyan-300' : 'text-gray-400 hover:bg-gray-700/50 hover:text-gray-200'}`}><Icon size={20} /><span>{label}</span></button></li>
+ <li><button onClick={onClick} className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors text-left ${activeView === view ? 'bg-cyan-600/20 text-cyan-300' : 'text-gray-400 hover:bg-gray-700/50 hover:text-gray-200'}`}><Icon size={20} /><span>{label}</span></button></li>
 );
 
-const Header = ({ onNavigate }) => {
+const Header = ({ showModal }) => {
     const { userData } = useFirebase();
     const [p2pStatus, setP2pStatus] = useState('Connecting...');
     const [veritasStatus, setVeritasStatus] = useState('Standby');
@@ -452,9 +476,16 @@ const Header = ({ onNavigate }) => {
     }, []);
 
     const handlePanic = () => {
-        // In a real app, this would trigger a more robust alert system
-        // (e.g., SMS via Twilio, push notifications, etc.)
-        alert("PANIC ALERT TRIGGERED!\n\nYour trusted contacts have been notified with your last known location.");
+        showModal(
+            "Panic Alert",
+            "Are you sure you want to trigger the panic alert? This will immediately notify your trusted contacts with your last known location.",
+            () => {
+                // In a real app, this would trigger a more robust alert system
+                // (e.g., SMS via Twilio, push notifications, etc.)
+                console.log("PANIC CONFIRMED! Sending alerts...");
+                showModal("Alert Sent", "Your trusted contacts have been notified.");
+            }
+        );
     };
 
     return (
@@ -716,10 +747,10 @@ const SystemStatus = () => {
     );
 
     const eventLog = [
-        { time: '21:14:00 SAST', msg: 'System check complete. All services nominal.', type: 'info' },
-        { time: '21:12:30 SAST', msg: 'P2P node count increased to 249.', type: 'info' },
-        { time: '21:10:01 SAST', msg: 'Minor latency fluctuation detected in EU-West-1.', type: 'warn' },
-        { time: '21:05:33 SAST', msg: 'Aegis Engine model updated to v5.0.0.', type: 'info' },
+        { time: '00:14:00 SAST', msg: 'System check complete. All services nominal.', type: 'info' },
+        { time: '00:12:30 SAST', msg: 'P2P node count increased to 249.', type: 'info' },
+        { time: '00:10:01 SAST', msg: 'Minor latency fluctuation detected in EU-West-1.', type: 'warn' },
+        { time: '00:05:33 SAST', msg: 'Aegis Engine model updated to v5.1.0.', type: 'info' },
     ];
 
     return (
@@ -730,9 +761,9 @@ const SystemStatus = () => {
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <StatusCard icon={Wifi} title="P2P Network Latency" value={metrics.latency.value} unit="ms" sparklineData={metrics.latency.history} color={metrics.latency.color} />
+                <StatusCard icon={Timer} title="P2P Network Latency" value={metrics.latency.value} unit="ms" sparklineData={metrics.latency.history} color={metrics.latency.color} />
                 <StatusCard icon={Bot} title="Aegis Engine Ops/Sec" value={metrics.dbOps.value} unit="" sparklineData={metrics.dbOps.history} color={metrics.dbOps.color} />
-                <StatusCard icon={Cpu} title="Active P2P Nodes" value={metrics.nodes.value} unit="" sparklineData={metrics.nodes.history} color={metrics.nodes.color} />
+                <StatusCard icon={Globe} title="Active P2P Nodes" value={metrics.nodes.value} unit="" sparklineData={metrics.nodes.history} color={metrics.nodes.color} />
                 <StatusCard icon={Siren} title="Network Threat Level" value={metrics.threat.level} unit="" color={metrics.threat.color}>
                     <div className="w-full bg-gray-700 rounded-full h-2.5 mt-4">
                         <div className="bg-green-500 h-2.5 rounded-full" style={{ width: '15%' }}></div>
@@ -979,7 +1010,7 @@ const ArticleManagement = ({ onNewArticle, onArticleSelect }) => {
     );
 };
 
-const ArticleView = ({ articleId, onBack, onEdit }) => {
+const ArticleView = ({ articleId, onBack, onEdit, showModal }) => {
     const { db, user, userData } = useFirebase();
     const [article, setArticle] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -1016,11 +1047,18 @@ const ArticleView = ({ articleId, onBack, onEdit }) => {
     };
 
     const handleDelete = async () => {
-        // Use a custom modal instead of window.confirm in a real app
-        if (window.confirm("Are you sure you want to permanently delete this article?")) {
-            try { await deleteDoc(doc(db, CONSTANTS.COLLECTIONS.ARTICLES, articleId)); onBack(); } 
-            catch (err) { setError(err); }
-        }
+        showModal(
+            "Delete Article",
+            "Are you sure you want to permanently delete this article? This action cannot be undone.",
+            async () => {
+                try { 
+                    await deleteDoc(doc(db, CONSTANTS.COLLECTIONS.ARTICLES, articleId)); 
+                    onBack(); 
+                } catch (err) { 
+                    setError(err); 
+                }
+            }
+        );
     };
     
     const handleSummarize = async () => {
@@ -1193,7 +1231,7 @@ const ArticleEditor = ({ articleId, onBack }) => {
     );
 };
 
-const ConversationManager = ({ onNavigate }) => {
+const ConversationManager = ({ showModal }) => {
     const { db, user } = useFirebase();
     const [conversations, setConversations] = useState([]);
     const [activeConvo, setActiveConvo] = useState(null);
@@ -1226,7 +1264,7 @@ const ConversationManager = ({ onNavigate }) => {
     };
 
     if (loading) return <Loader2 className="animate-spin text-cyan-400" />;
-    if (activeConvo) return <ChatWindow conversation={activeConvo} onBack={() => setActiveConvo(null)} />;
+    if (activeConvo) return <ChatWindow conversation={activeConvo} onBack={() => setActiveConvo(null)} showModal={showModal} />;
 
     return (
         <div className="bg-gray-800/50 p-6 rounded-xl border border-gray-700/50">
@@ -1248,7 +1286,7 @@ const ConversationManager = ({ onNavigate }) => {
     );
 };
 
-const ChatWindow = ({ conversation, onBack }) => {
+const ChatWindow = ({ conversation, onBack, showModal }) => {
     const { db, user } = useFirebase();
     const [messages, setMessages] = useState([]);
     const [newMessage, setNewMessage] = useState('');
@@ -1280,7 +1318,9 @@ const ChatWindow = ({ conversation, onBack }) => {
     };
 
     const copyInviteLink = () => {
-        navigator.clipboard.writeText(inviteLink).then(() => alert('Invite link copied to clipboard!'));
+        navigator.clipboard.writeText(inviteLink).then(() => {
+            showModal('Link Copied', 'The secure invite link has been copied to your clipboard.');
+        });
     };
 
     return (
@@ -1382,7 +1422,7 @@ const ChatInviteHandler = ({ chatId }) => {
     );
 };
 
-const SecureVault = () => {
+const SecureVault = ({ showModal }) => {
     const { db, user, storage } = useFirebase();
     const [files, setFiles] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -1420,17 +1460,22 @@ const SecureVault = () => {
     };
 
     const handleDeleteFile = async (file) => {
-        if (!window.confirm(`Are you sure you want to delete ${file.fileName}?`)) return;
-        try {
-            // Delete from Firestore
-            await deleteDoc(doc(db, 'users', user.uid, 'vaultFiles', file.id));
-            // Delete from Storage
-            const fileRef = ref(storage, file.storagePath);
-            await deleteObject(fileRef);
-        } catch (error) {
-            console.error("Failed to delete file:", error);
-            alert("Error deleting file. It may have been partially removed. Please check the console.");
-        }
+        showModal(
+            "Delete File",
+            `Are you sure you want to permanently delete ${file.fileName}?`,
+            async () => {
+                try {
+                    // Delete from Firestore
+                    await deleteDoc(doc(db, 'users', user.uid, 'vaultFiles', file.id));
+                    // Delete from Storage
+                    const fileRef = ref(storage, file.storagePath);
+                    await deleteObject(fileRef);
+                } catch (error) {
+                    console.error("Failed to delete file:", error);
+                    showModal("Error", "Error deleting file. It may have been partially removed. Please check the console.");
+                }
+            }
+        );
     };
 
     return (
@@ -1449,7 +1494,7 @@ const SecureVault = () => {
                     {files.map(file => (
                         <li key={file.id} className="p-3 rounded-lg bg-gray-900/70 flex justify-between items-center group">
                             <a href={file.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3">
-                                <File size={20} className="text-cyan-400" />
+                                <FileText size={20} className="text-cyan-400" />
                                 <div>
                                     <p className="font-semibold text-white">{file.fileName}</p>
                                     <p className="text-xs text-gray-400">{(file.size / 1024 / 1024).toFixed(2)} MB &bull; {file.uploadedAt?.toDate().toLocaleDateString()}</p>
@@ -1621,7 +1666,7 @@ const NewCase = ({ onBack }) => {
     );
 };
 
-const CaseView = ({ caseId, onBack }) => {
+const CaseView = ({ caseId, onBack, showModal }) => {
     const { db } = useFirebase();
     const [caseData, setCaseData] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -1641,21 +1686,25 @@ const CaseView = ({ caseId, onBack }) => {
     }, [db, caseId]);
 
     const handleCloseCase = async () => {
-        if (window.confirm("Are you sure you want to close this case? It will be moved to the vault.")) {
-            setIsClosing(true);
-            try {
-                const caseRef = doc(db, CONSTANTS.COLLECTIONS.CASES, caseId);
-                await updateDoc(caseRef, {
-                    status: 'closed',
-                    lastUpdatedAt: serverTimestamp()
-                });
-                onBack();
-            } catch (err) {
-                console.error("Failed to close case:", err);
-                // In a real app, show an error modal
+        showModal(
+            "Close Case",
+            "Are you sure you want to close this case? It will be moved to the vault and become read-only.",
+            async () => {
+                setIsClosing(true);
+                try {
+                    const caseRef = doc(db, CONSTANTS.COLLECTIONS.CASES, caseId);
+                    await updateDoc(caseRef, {
+                        status: 'closed',
+                        lastUpdatedAt: serverTimestamp()
+                    });
+                    onBack();
+                } catch (err) {
+                    console.error("Failed to close case:", err);
+                    showModal("Error", "Failed to close the case. Please try again.");
+                }
+                setIsClosing(false);
             }
-            setIsClosing(false);
-        }
+        );
     };
     
     const handleAnalyze = async () => {
@@ -1693,7 +1742,7 @@ const CaseView = ({ caseId, onBack }) => {
                 </div>
                 <div className="flex items-center gap-2">
                     <button onClick={handleAnalyze} className="flex items-center gap-2 bg-purple-600 text-white font-bold py-2 px-3 rounded-lg hover:bg-purple-700 transition-colors text-sm">
-                        <Sparkles size={16} /> ✨ Analyze with AI
+                        <Sparkles size={16} /> Analyze with AI
                     </button>
                     {caseData.status !== 'closed' && (
                         <button onClick={handleCloseCase} disabled={isClosing} className="flex items-center gap-2 bg-gray-600 text-white font-bold py-2 px-3 rounded-lg hover:bg-gray-700 transition-colors text-sm disabled:bg-gray-500">
@@ -1707,17 +1756,17 @@ const CaseView = ({ caseId, onBack }) => {
                 <TabButton view="details" label="Details" icon={Info} />
                 <TabButton view="evidence" label="Evidence Locker" icon={Lock} />
                 <TabButton view="audit" label="Audit Trail" icon={Shield} />
-                <TabButton view="notes" label="Field Notes" icon={File} />
+                <TabButton view="notes" label="Field Notes" icon={FileText} />
                 <TabButton view="tasks" label="Action Items" icon={ListTodo} />
                 <TabButton view="chat" label="Secure Chat" icon={MessageSquare} />
             </div>
             <div className="bg-gray-800/50 p-6 rounded-b-lg shadow-lg border-x border-b border-gray-700/50">
                 {activeTab === 'details' && <CaseDetails caseData={caseData} />}
-                {activeTab === 'evidence' && <EvidenceLocker caseId={caseId} />}
+                {activeTab === 'evidence' && <EvidenceLocker caseId={caseId} showModal={showModal}/>}
                 {activeTab === 'audit' && <EvidenceAuditTrail caseId={caseId} />}
                 {activeTab === 'notes' && <CaseFieldNotes caseId={caseId} />}
                 {activeTab === 'tasks' && <CaseTasks caseId={caseId} />}
-                {activeTab === 'chat' && <CaseChat caseId={caseId} />}
+                {activeTab === 'chat' && <CaseChat caseId={caseId} showModal={showModal} />}
             </div>
         </div>
         {showAnalysisModal && (
@@ -1751,8 +1800,8 @@ const CaseDetails = ({ caseData }) => (
     </div>
 );
 
-const EvidenceLocker = ({ caseId }) => {
-    const { db, storage, user } = useFirebase();
+const EvidenceLocker = ({ caseId, showModal }) => {
+    const { db, storage, user, userData } = useFirebase();
     const [evidence, setEvidence] = useState([]);
     const [uploading, setUploading] = useState(false);
     const [showTranscriptionModal, setShowTranscriptionModal] = useState(false);
@@ -1764,6 +1813,15 @@ const EvidenceLocker = ({ caseId }) => {
         const unsubscribe = onSnapshot(q, snap => setEvidence(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
         return unsubscribe;
     }, [db, caseId]);
+    
+    const logAuditEvent = async (action, details) => {
+        await addDoc(collection(db, `cases/${caseId}/auditLog`), {
+            action,
+            user: userData.email,
+            timestamp: serverTimestamp(),
+            details
+        });
+    };
 
     const handleFileUpload = async (e) => {
         const file = e.target.files[0];
@@ -1780,6 +1838,7 @@ const EvidenceLocker = ({ caseId }) => {
                 uploadedAt: serverTimestamp(),
                 uploaderUid: user.uid
             });
+            await logAuditEvent('UPLOAD', { fileName: file.name });
         } catch (error) { console.error("Upload failed", error); }
         setUploading(false);
     };
@@ -1791,6 +1850,7 @@ const EvidenceLocker = ({ caseId }) => {
             const prompt = `This is a mock transcription for the audio file "${fileName}". Generate a plausible-sounding but fictional transcription of a conversation between two speakers, "Speaker A" and "Speaker B", discussing a sensitive event. Include a brief translation into Spanish.`;
             const result = await callGeminiAPI(prompt);
             setTranscription(result);
+            await logAuditEvent('AI_TRANSCRIBE', { fileName });
         } catch (err) {
             setTranscription("Failed to generate transcription.");
         }
@@ -1812,7 +1872,7 @@ const EvidenceLocker = ({ caseId }) => {
                     {evidence.map(item => (
                         <li key={item.id} className="bg-gray-900/50 p-3 rounded-lg flex items-center justify-between">
                             <div className="flex items-center gap-3">
-                                <File className="text-cyan-400" />
+                                <FileText className="text-cyan-400" />
                                 <a href={item.url} target="_blank" rel="noopener noreferrer" className="text-white hover:underline">{item.fileName}</a>
                             </div>
                             <div className="flex items-center gap-2">
@@ -1892,7 +1952,7 @@ const CaseTasks = ({ caseId }) => {
     );
 };
 
-const CaseChat = ({ caseId }) => {
+const CaseChat = ({ caseId, showModal }) => {
     const { db, user } = useFirebase();
     const [messages, setMessages] = useState([]);
     const [newMessage, setNewMessage] = useState('');
@@ -1925,7 +1985,7 @@ const CaseChat = ({ caseId }) => {
         <div className="flex flex-col h-[60vh]">
             <div className="flex justify-between items-center mb-4">
                 <h3 className="text-xl font-bold text-gray-300">Secure Client Chat</h3>
-                <button onClick={() => navigator.clipboard.writeText(inviteLink).then(() => alert('Invite link copied!'))} className="flex items-center bg-gray-700 text-white font-bold py-2 px-3 rounded-lg hover:bg-gray-600 text-sm">
+                <button onClick={() => navigator.clipboard.writeText(inviteLink).then(() => showModal('Link Copied', 'The secure invite link has been copied to your clipboard.'))} className="flex items-center bg-gray-700 text-white font-bold py-2 px-3 rounded-lg hover:bg-gray-600 text-sm">
                     <Link className="mr-2" size={16} /> Copy Invite Link
                 </button>
             </div>
@@ -2019,42 +2079,126 @@ const CaseChatInviteHandler = ({ caseChatId }) => {
 
 // --- NEW FUTURISTIC COMPONENTS ---
 
-const ThreatIntelDashboard = () => (
-    <div className="w-full max-w-5xl p-6 bg-gray-800/50 rounded-2xl border border-gray-700/50 shadow-2xl">
-        <h1 className="text-3xl font-bold text-purple-300 mb-2 flex items-center gap-3"><SearchCode /> Threat Intelligence</h1>
-        <p className="text-gray-400 mb-6">AI-driven monitoring of emergent misinformation campaigns.</p>
-        <div className="bg-purple-900/20 border border-purple-500/30 p-6 rounded-lg">
-            <h2 className="text-xl font-semibold text-purple-200">Active Campaign Detected: "Hydro-Contamination Hoax"</h2>
-            <p className="text-sm text-gray-400">First detected: 2025-07-30 14:00 SAST</p>
-            <div className="mt-4 grid grid-cols-3 gap-4 text-center">
-                <div><p className="text-2xl font-bold text-white">4.2K</p><p className="text-xs text-gray-400">Social Mentions (24h)</p></div>
-                <div><p className="text-2xl font-bold text-red-400">+78%</p><p className="text-xs text-gray-400">Velocity (24h)</p></div>
-                <div><p className="text-2xl font-bold text-amber-400">High</p><p className="text-xs text-gray-400">AI Confidence Score</p></div>
+const ThreatIntelDashboard = () => {
+    const [campaign, setCampaign] = useState(null);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const generateThreat = async () => {
+            setLoading(true);
+            const prompt = `Generate a fictional but plausible-sounding misinformation campaign being tracked by a threat intelligence platform. Provide a catchy name for the campaign (e.g., "Hydro-Contamination Hoax"), a short narrative summary, a random number of social mentions between 1000 and 10000, a random velocity percentage change between -50 and +150, and an AI confidence score (Low, Medium, High, Critical). Format the output as a JSON object with keys: "name", "narrative", "mentions", "velocity", "confidence".`;
+            try {
+                const result = await callGeminiAPI(prompt);
+                const parsedResult = JSON.parse(result.replace(/```json/g, '').replace(/```/g, ''));
+                setCampaign(parsedResult);
+            } catch (e) {
+                console.error("Failed to generate threat intel:", e);
+                setCampaign({ name: "Error Generating Threat", narrative: "Could not contact the Aegis analysis engine.", mentions: 0, velocity: 0, confidence: "N/A" });
+            }
+            setLoading(false);
+        };
+        generateThreat();
+    }, []);
+
+    if (loading || !campaign) {
+        return <div className="w-full max-w-5xl p-6 flex justify-center items-center"><Loader2 className="animate-spin text-purple-400" size={48} /></div>;
+    }
+    
+    const confidenceColor = {
+        "Low": "text-green-400",
+        "Medium": "text-yellow-400",
+        "High": "text-amber-400",
+        "Critical": "text-red-400",
+    }[campaign.confidence] || "text-gray-400";
+
+    return (
+        <div className="w-full max-w-5xl p-6 bg-gray-800/50 rounded-2xl border border-gray-700/50 shadow-2xl">
+            <h1 className="text-3xl font-bold text-purple-300 mb-2 flex items-center gap-3"><SearchCode /> Threat Intelligence</h1>
+            <p className="text-gray-400 mb-6">AI-driven monitoring of emergent misinformation campaigns.</p>
+            <div className="bg-purple-900/20 border border-purple-500/30 p-6 rounded-lg">
+                <h2 className="text-xl font-semibold text-purple-200">Active Campaign Detected: "{campaign.name}"</h2>
+                <p className="text-sm text-gray-400">First detected: {new Date().toLocaleDateString('en-ZA', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+                <div className="mt-4 grid grid-cols-3 gap-4 text-center">
+                    <div><p className="text-2xl font-bold text-white">{campaign.mentions.toLocaleString()}</p><p className="text-xs text-gray-400">Social Mentions (24h)</p></div>
+                    <div><p className={`text-2xl font-bold ${campaign.velocity > 0 ? 'text-red-400' : 'text-green-400'}`}>{campaign.velocity > 0 ? '+' : ''}{campaign.velocity}%</p><p className="text-xs text-gray-400">Velocity (24h)</p></div>
+                    <div><p className={`text-2xl font-bold ${confidenceColor}`}>{campaign.confidence}</p><p className="text-xs text-gray-400">AI Confidence Score</p></div>
+                </div>
+                <p className="mt-4 text-gray-300">
+                    <strong className="text-white">Narrative:</strong> {campaign.narrative}
+                </p>
             </div>
-            <p className="mt-4 text-gray-300">
-                <strong className="text-white">Narrative:</strong> A coordinated campaign is spreading false claims of industrial water contamination, using deepfaked videos of public officials. The campaign primarily targets users in the Gauteng region via WhatsApp and X (formerly Twitter).
-            </p>
         </div>
-        <p className="text-center mt-8 text-gray-500">This is a conceptual feature. Live threat analysis is not yet implemented.</p>
-    </div>
-);
+    );
+};
 
 
-const SourceVettingDashboard = () => (
-    <div className="w-full max-w-5xl p-6 bg-gray-800/50 rounded-2xl border border-gray-700/50 shadow-2xl">
-        <h1 className="text-3xl font-bold text-cyan-300 mb-2 flex items-center gap-3"><UserCheck /> Source Vetting AI</h1>
-        <p className="text-gray-400 mb-6">Analyze digital footprints to assess source credibility. All data is anonymized.</p>
-        {/* Mock UI for this feature */}
-        <div className="bg-gray-900/50 p-6 rounded-lg border border-gray-700">
-            <label htmlFor="source-id" className="font-semibold text-gray-300">Enter Anonymous Source ID or Comm Link</label>
-            <div className="flex gap-2 mt-2">
-                <input id="source-id" type="text" placeholder="e.g., chat-id-xyz789" className="flex-grow p-3 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500" />
-                <button className="bg-cyan-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-cyan-500">Analyze</button>
+const SourceVettingDashboard = () => {
+    const [sourceId, setSourceId] = useState('');
+    const [analysis, setAnalysis] = useState(null);
+    const [loading, setLoading] = useState(false);
+
+    const handleAnalyze = async () => {
+        if (!sourceId) return;
+        setLoading(true);
+        setAnalysis(null);
+        const prompt = `Generate a fictional but plausible-sounding source vetting analysis for an anonymous source with the identifier "${sourceId}". The analysis should be for a secure platform and should not reveal any PII. Provide a credibility score (e.g., 65%), a confidence level (e.g., "Medium"), a summary of findings (e.g., "Digital footprint is minimal and appears recently created. Communication patterns are consistent."), and a list of potential biases or risks (e.g., "Possible echo chamber effect detected in shared links."). Format the output as a JSON object with keys: "credibilityScore", "confidence", "summary", "risks".`;
+        try {
+            const result = await callGeminiAPI(prompt);
+            const parsedResult = JSON.parse(result.replace(/```json/g, '').replace(/```/g, ''));
+            setAnalysis(parsedResult);
+        } catch (e) {
+            console.error("Failed to generate source analysis:", e);
+            setAnalysis({ error: "Could not generate analysis. The AI engine may be offline." });
+        }
+        setLoading(false);
+    };
+
+    return (
+        <div className="w-full max-w-5xl p-6 bg-gray-800/50 rounded-2xl border border-gray-700/50 shadow-2xl">
+            <h1 className="text-3xl font-bold text-cyan-300 mb-2 flex items-center gap-3"><UserCheck /> Source Vetting AI</h1>
+            <p className="text-gray-400 mb-6">Analyze digital footprints to assess source credibility. All data is anonymized.</p>
+            <div className="bg-gray-900/50 p-6 rounded-lg border border-gray-700">
+                <label htmlFor="source-id" className="font-semibold text-gray-300">Enter Anonymous Source ID or Comm Link</label>
+                <div className="flex gap-2 mt-2">
+                    <input id="source-id" type="text" value={sourceId} onChange={e => setSourceId(e.target.value)} placeholder="e.g., chat-id-xyz789" className="flex-grow p-3 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500" />
+                    <button onClick={handleAnalyze} disabled={loading} className="bg-cyan-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-cyan-500 disabled:bg-gray-500">
+                        {loading ? <Loader2 className="animate-spin" /> : 'Analyze'}
+                    </button>
+                </div>
             </div>
-            <p className="text-center mt-8 text-gray-500">This is a conceptual feature. Live source analysis is not yet implemented.</p>
+
+            {analysis && (
+                <div className="mt-6 bg-gray-900/50 p-6 rounded-lg border border-gray-700">
+                    {analysis.error ? <p className="text-red-400">{analysis.error}</p> : (
+                        <>
+                            <h2 className="text-xl font-semibold text-gray-200 mb-4">Analysis for: <span className="text-cyan-300">{sourceId}</span></h2>
+                            <div className="grid grid-cols-2 gap-4 mb-4">
+                                <div className="bg-gray-800 p-4 rounded-lg text-center">
+                                    <p className="text-sm text-gray-400">Credibility Score</p>
+                                    <p className="text-3xl font-bold text-cyan-300">{analysis.credibilityScore}</p>
+                                </div>
+                                <div className="bg-gray-800 p-4 rounded-lg text-center">
+                                    <p className="text-sm text-gray-400">AI Confidence</p>
+                                    <p className="text-3xl font-bold text-cyan-300">{analysis.confidence}</p>
+                                </div>
+                            </div>
+                            <div>
+                                <h3 className="font-semibold text-gray-300">Summary</h3>
+                                <p className="text-gray-400">{analysis.summary}</p>
+                            </div>
+                            <div className="mt-4">
+                                <h3 className="font-semibold text-gray-300">Potential Risks & Biases</h3>
+                                <ul className="list-disc list-inside text-amber-400/80 text-sm space-y-1 mt-1">
+                                    {analysis.risks.map((risk, i) => <li key={i}>{risk}</li>)}
+                                </ul>
+                            </div>
+                        </>
+                    )}
+                </div>
+            )}
         </div>
-    </div>
-);
+    );
+};
 
 const DataStudio = () => (
      <div className="w-full max-w-5xl p-6 bg-gray-800/50 rounded-2xl border border-gray-700/50 shadow-2xl text-center">
@@ -2065,89 +2209,294 @@ const DataStudio = () => (
     </div>
 );
 
-const RiskAnalysisDashboard = () => (
-    <div className="w-full max-w-5xl p-6 bg-gray-800/50 rounded-2xl border border-gray-700/50 shadow-2xl">
-        <h1 className="text-3xl font-bold text-purple-300 mb-2 flex items-center gap-3"><Gauge /> Predictive Risk Analysis</h1>
-        <p className="text-gray-400 mb-6">AI-powered risk assessment for active cases.</p>
-        <div className="bg-red-900/20 border border-red-500/30 p-6 rounded-lg">
-            <h2 className="text-xl font-semibold text-red-200">High Risk Case: CASE-166845398271</h2>
-            <p className="text-sm text-gray-400">Last Assessed: 2025-07-31 09:00 SAST</p>
-            <div className="mt-4 grid grid-cols-3 gap-4">
-                <div><strong className="text-white block">Digital Threat</strong><span className="text-red-400">Severe</span></div>
-                <div><strong className="text-white block">Physical Threat</strong><span className="text-amber-400">Elevated</span></div>
-                <div><strong className="text-white block">Legal Threat</strong><span className="text-amber-400">Moderate</span></div>
+const RiskAnalysisDashboard = () => {
+    const [caseId, setCaseId] = useState('');
+    const [analysis, setAnalysis] = useState(null);
+    const [loading, setLoading] = useState(false);
+
+    const handleAnalyze = async () => {
+        if (!caseId) return;
+        setLoading(true);
+        setAnalysis(null);
+        const prompt = `Generate a fictional but plausible-sounding predictive risk analysis for a human rights case with the identifier "${caseId}". Provide a risk level for "Digital Threat", "Physical Threat", and "Legal Threat" (options: Low, Moderate, Elevated, Severe, Critical). Also provide a short summary analysis. Format the output as a JSON object with keys: "digital", "physical", "legal", and "summary".`;
+        try {
+            const result = await callGeminiAPI(prompt);
+            const parsedResult = JSON.parse(result.replace(/```json/g, '').replace(/```/g, ''));
+            setAnalysis(parsedResult);
+        } catch (e) {
+            console.error("Failed to generate risk analysis:", e);
+            setAnalysis({ error: "Could not generate analysis. The AI engine may be offline." });
+        }
+        setLoading(false);
+    };
+    
+    const getRiskColor = (level) => ({
+        "Low": "text-green-400",
+        "Moderate": "text-yellow-400",
+        "Elevated": "text-amber-400",
+        "Severe": "text-orange-400",
+        "Critical": "text-red-400",
+    }[level] || "text-gray-400");
+
+    return (
+        <div className="w-full max-w-5xl p-6 bg-gray-800/50 rounded-2xl border border-gray-700/50 shadow-2xl">
+            <h1 className="text-3xl font-bold text-purple-300 mb-2 flex items-center gap-3"><Gauge /> Predictive Risk Analysis</h1>
+            <p className="text-gray-400 mb-6">AI-powered risk assessment for active cases.</p>
+            <div className="bg-gray-900/50 p-6 rounded-lg border border-gray-700">
+                <label htmlFor="case-id-risk" className="font-semibold text-gray-300">Enter Case ID to Analyze</label>
+                <div className="flex gap-2 mt-2">
+                    <input id="case-id-risk" type="text" value={caseId} onChange={e => setCaseId(e.target.value)} placeholder="e.g., CASE-166845398271" className="flex-grow p-3 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500" />
+                    <button onClick={handleAnalyze} disabled={loading} className="bg-purple-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-purple-500 disabled:bg-gray-500">
+                        {loading ? <Loader2 className="animate-spin" /> : 'Analyze'}
+                    </button>
+                </div>
             </div>
-            <p className="mt-4 text-gray-300">
-                <strong className="text-white">Analysis:</strong> AI model indicates a high probability of targeted phishing attacks against the client. Increased online chatter from state-affiliated actors has been detected. Recommend immediate review of digital security protocols.
-            </p>
+
+            {analysis && (
+                <div className="mt-6 bg-purple-900/20 border border-purple-500/30 p-6 rounded-lg">
+                    {analysis.error ? <p className="text-red-400">{analysis.error}</p> : (
+                        <>
+                            <h2 className="text-xl font-semibold text-purple-200">Risk Profile for: {caseId}</h2>
+                            <p className="text-sm text-gray-400">Assessed: {new Date().toLocaleString('en-ZA')}</p>
+                            <div className="mt-4 grid grid-cols-3 gap-4 text-center">
+                                <div><strong className="text-white block">Digital Threat</strong><span className={getRiskColor(analysis.digital)}>{analysis.digital}</span></div>
+                                <div><strong className="text-white block">Physical Threat</strong><span className={getRiskColor(analysis.physical)}>{analysis.physical}</span></div>
+                                <div><strong className="text-white block">Legal Threat</strong><span className={getRiskColor(analysis.legal)}>{analysis.legal}</span></div>
+                            </div>
+                            <p className="mt-4 text-gray-300">
+                                <strong className="text-white">Analysis:</strong> {analysis.summary}
+                            </p>
+                        </>
+                    )}
+                </div>
+            )}
         </div>
-         <p className="text-center mt-8 text-gray-500">This is a conceptual feature. Live risk analysis is not yet implemented.</p>
-    </div>
-);
+    );
+};
 
 
-const LegalAidAI = () => (
-    <div className="w-full max-w-5xl p-6 bg-gray-800/50 rounded-2xl border border-gray-700/50 shadow-2xl">
-        <h1 className="text-3xl font-bold text-cyan-300 mb-2 flex items-center gap-3"><Gavel /> Legal Aid AI</h1>
-        <p className="text-gray-400 mb-6">Matches case details with relevant legal frameworks and support organizations.</p>
-        <div className="bg-gray-900/50 p-6 rounded-lg border border-gray-700">
-            <label htmlFor="case-id" className="font-semibold text-gray-300">Enter Case ID</label>
-            <div className="flex gap-2 mt-2">
-                <input id="case-id" type="text" placeholder="e.g., CASE-166845398271" className="flex-grow p-3 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500" />
-                <button className="bg-cyan-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-cyan-500">Find Resources</button>
+const LegalAidAI = () => {
+    const [caseDesc, setCaseDesc] = useState('');
+    const [resources, setResources] = useState(null);
+    const [loading, setLoading] = useState(false);
+
+    const handleAnalyze = async () => {
+        if (!caseDesc) return;
+        setLoading(true);
+        setResources(null);
+        const prompt = `Based on the following human rights case description from South Africa, identify one relevant legal framework or act, one relevant (but fictional) legal precedent, and one type of real-world support organization that would be appropriate. Format the output as a JSON object with keys: "framework", "precedent", "organization".\n\nDescription: ${caseDesc}`;
+        try {
+            const result = await callGeminiAPI(prompt);
+            const parsedResult = JSON.parse(result.replace(/```json/g, '').replace(/```/g, ''));
+            setResources(parsedResult);
+        } catch (e) {
+            console.error("Failed to generate legal aid info:", e);
+            setResources({ error: "Could not generate resources. The AI engine may be offline." });
+        }
+        setLoading(false);
+    };
+
+    return (
+        <div className="w-full max-w-5xl p-6 bg-gray-800/50 rounded-2xl border border-gray-700/50 shadow-2xl">
+            <h1 className="text-3xl font-bold text-cyan-300 mb-2 flex items-center gap-3"><Gavel /> Legal Aid AI</h1>
+            <p className="text-gray-400 mb-6">Matches case details with relevant legal frameworks and support organizations.</p>
+            <div className="bg-gray-900/50 p-6 rounded-lg border border-gray-700">
+                <label htmlFor="case-desc" className="font-semibold text-gray-300">Paste Case Description for Analysis</label>
+                <textarea id="case-desc" value={caseDesc} onChange={e => setCaseDesc(e.target.value)} rows="5" placeholder="e.g., 'A journalist was arrested while covering a protest and their equipment was confiscated...'" className="w-full mt-2 p-3 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500"></textarea>
+                <div className="text-right mt-2">
+                    <button onClick={handleAnalyze} disabled={loading} className="bg-cyan-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-cyan-500 disabled:bg-gray-500">
+                        {loading ? <Loader2 className="animate-spin" /> : 'Find Resources'}
+                    </button>
+                </div>
             </div>
+            {resources && (
+                <div className="mt-6 bg-gray-900/50 p-6 rounded-lg border border-gray-700">
+                    <h2 className="font-semibold text-gray-200">Suggested Resources:</h2>
+                     {resources.error ? <p className="text-red-400">{resources.error}</p> : (
+                        <ul className="list-disc list-inside mt-2 text-gray-300 space-y-2">
+                            <li><strong className="text-white">Relevant Framework:</strong> {resources.framework}</li>
+                            <li><strong className="text-white">Legal Precedent:</strong> {resources.precedent}</li>
+                            <li><strong className="text-white">Support Org Type:</strong> {resources.organization}</li>
+                        </ul>
+                    )}
+                </div>
+            )}
         </div>
-        <div className="mt-6 bg-gray-900/50 p-6 rounded-lg border border-gray-700">
-            <h2 className="font-semibold text-gray-200">Suggested Resources for CASE-166845398271:</h2>
-            <ul className="list-disc list-inside mt-2 text-gray-300 space-y-1">
-                <li><strong className="text-white">Relevant Framework:</strong> Protection of Personal Information Act (POPIA), 2013</li>
-                <li><strong className="text-white">Legal Precedent:</strong> *John Doe v. State Security Agency (2022)*</li>
-                <li><strong className="text-white">Partner Org:</strong> Lawyers for Human Rights (LHR) - Digital Rights Unit</li>
-            </ul>
-        </div>
-        <p className="text-center mt-8 text-gray-500">This is a conceptual feature. Live matching is not yet implemented.</p>
-    </div>
-);
+    );
+};
 
 const EvidenceAuditTrail = ({ caseId }) => {
-    // In a real app, this data would come from a secure, append-only log or blockchain.
-    const mockAuditLog = [
-        { timestamp: "2025-07-31 09:05:11 SAST", user: "hrd.seed@chimera.test", action: "DOWNLOADED", file: "video_evidence_01.mp4", ip: "102.132.1.55", hash: "a1b2..." },
-        { timestamp: "2025-07-31 08:40:23 SAST", user: "hrd.seed@chimera.test", action: "UPLOADED", file: "video_evidence_01.mp4", ip: "102.132.1.55", hash: "a1b2..." },
-        { timestamp: "2025-07-30 16:12:45 SAST", user: "client_anonymous", action: "UPLOADED", file: "encrypted_docs.zip", ip: "197.80.5.12", hash: "f9e8..." },
-    ];
+    const { db } = useFirebase();
+    const [auditLog, setAuditLog] = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const q = query(collection(db, `cases/${caseId}/auditLog`), orderBy('timestamp', 'desc'));
+        const unsubscribe = onSnapshot(q, snap => {
+            setAuditLog(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+            setLoading(false);
+        });
+        return unsubscribe;
+    }, [db, caseId]);
 
     return (
         <div>
             <h3 className="text-xl font-bold text-gray-300 mb-4">Evidence Chain-of-Custody</h3>
             <p className="text-sm text-gray-500 mb-4">This is an immutable log of all actions performed on evidence in this case.</p>
-            <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm font-mono">
-                    <thead className="border-b border-gray-600 text-gray-400">
-                        <tr>
-                            <th className="p-2">Timestamp</th>
-                            <th className="p-2">User/Entity</th>
-                            <th className="p-2">Action</th>
-                            <th className="p-2">File</th>
-                            <th className="p-2">IP Address</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-700">
-                        {mockAuditLog.map((log, i) => (
-                             <tr key={i}>
-                                <td className="p-2 text-gray-400">{log.timestamp}</td>
-                                <td className="p-2 text-white">{log.user}</td>
-                                <td className={`p-2 font-semibold ${log.action === 'UPLOADED' ? 'text-green-400' : 'text-amber-400'}`}>{log.action}</td>
-                                <td className="p-2 text-cyan-400">{log.file}</td>
-                                <td className="p-2 text-gray-500">{log.ip}</td>
+            {loading ? <Loader2 className="animate-spin text-cyan-400" /> : (
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left text-sm font-mono">
+                        <thead className="border-b border-gray-600 text-gray-400">
+                            <tr>
+                                <th className="p-2">Timestamp</th>
+                                <th className="p-2">User/Entity</th>
+                                <th className="p-2">Action</th>
+                                <th className="p-2">Details</th>
                             </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-700">
+                            {auditLog.map((log) => (
+                                 <tr key={log.id}>
+                                    <td className="p-2 text-gray-400">{log.timestamp?.toDate().toLocaleString()}</td>
+                                    <td className="p-2 text-white">{log.user}</td>
+                                    <td className={`p-2 font-semibold ${log.action === 'UPLOAD' ? 'text-green-400' : 'text-amber-400'}`}>{log.action}</td>
+                                    <td className="p-2 text-cyan-400">{log.details.fileName}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            )}
+        </div>
+    );
+};
+
+const CaseFieldNotes = ({ caseId }) => {
+    const { db, user } = useFirebase();
+    const [notes, setNotes] = useState([]);
+    const [currentNote, setCurrentNote] = useState({ id: null, text: '' });
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
+
+    useEffect(() => {
+        const q = query(collection(db, `cases/${caseId}/notes`), orderBy('createdAt', 'desc'));
+        const unsubscribe = onSnapshot(q, snap => {
+            setNotes(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+            setLoading(false);
+        });
+        return unsubscribe;
+    }, [db, caseId]);
+
+    const handleSaveNote = async () => {
+        if (currentNote.text.trim() === '') return;
+        setSaving(true);
+        if (currentNote.id) {
+            // Update existing note
+            await updateDoc(doc(db, `cases/${caseId}/notes`, currentNote.id), {
+                text: currentNote.text,
+                updatedAt: serverTimestamp()
+            });
+        } else {
+            // Create new note
+            await addDoc(collection(db, `cases/${caseId}/notes`), {
+                text: currentNote.text,
+                authorUid: user.uid,
+                createdAt: serverTimestamp()
+            });
+        }
+        setCurrentNote({ id: null, text: '' });
+        setSaving(false);
+    };
+    
+    const handleDeleteNote = async (noteId) => {
+        if (window.confirm("Delete this note permanently?")) {
+            await deleteDoc(doc(db, `cases/${caseId}/notes`, noteId));
+        }
+    };
+
+    return (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-1">
+                <h3 className="text-xl font-bold text-gray-300 mb-4">Field Notes</h3>
+                <button onClick={() => setCurrentNote({ id: null, text: '' })} className="w-full flex items-center justify-center gap-2 bg-cyan-600 text-white font-bold py-2 px-3 rounded-lg hover:bg-cyan-500 mb-4">
+                    <PlusCircle size={16} /> New Note
+                </button>
+                {loading ? <Loader2 className="animate-spin text-cyan-400" /> : (
+                    <ul className="space-y-2 h-96 overflow-y-auto pr-2">
+                        {notes.map(note => (
+                            <li key={note.id} onClick={() => setCurrentNote(note)} className={`p-3 rounded-lg cursor-pointer ${currentNote.id === note.id ? 'bg-cyan-600/20' : 'bg-gray-900/50 hover:bg-gray-700/50'}`}>
+                                <p className="text-white truncate">{note.text}</p>
+                                <p className="text-xs text-gray-500">{note.createdAt?.toDate().toLocaleDateString()}</p>
+                            </li>
                         ))}
-                    </tbody>
-                </table>
+                    </ul>
+                )}
+            </div>
+            <div className="lg:col-span-2">
+                <h3 className="text-xl font-bold text-gray-300 mb-4">{currentNote.id ? 'Edit Note' : 'New Note'}</h3>
+                <textarea 
+                    value={currentNote.text}
+                    onChange={e => setCurrentNote({...currentNote, text: e.target.value})}
+                    placeholder="Start writing your field notes..."
+                    rows="15"
+                    className="w-full p-4 bg-gray-900/50 border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                />
+                <div className="flex justify-end items-center gap-4 mt-4">
+                    {currentNote.id && (
+                        <button onClick={() => handleDeleteNote(currentNote.id)} className="text-red-400 hover:text-red-300 font-semibold">
+                            <Trash2 size={18} />
+                        </button>
+                    )}
+                    <button onClick={handleSaveNote} disabled={saving} className="flex items-center gap-2 bg-cyan-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-cyan-500 disabled:bg-gray-500">
+                        {saving ? <Loader2 className="animate-spin" size={20}/> : <Save size={20} />}
+                        {saving ? 'Saving...' : 'Save Note'}
+                    </button>
+                </div>
             </div>
         </div>
     );
 };
+
+const PersonalSecurityDashboard = () => {
+    const { userData } = useFirebase();
+    const [advice, setAdvice] = useState('');
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const getAdvice = async () => {
+            setLoading(true);
+            const prompt = `Generate a concise personal security checklist for a ${userData.role} operating in a high-risk environment. The checklist should be actionable and divided into three categories: "Digital Security", "Physical Security", and "Travel Security". For each category, provide 3-4 key bullet points. Format the entire output as a single block of text using markdown for headings and bullet points.`;
+            try {
+                const result = await callGeminiAPI(prompt);
+                setAdvice(result);
+            } catch (e) {
+                console.error("Failed to get security advice:", e);
+                setAdvice("Could not retrieve security advice. Please check your connection.");
+            }
+            setLoading(false);
+        };
+        if (userData.role) {
+            getAdvice();
+        }
+    }, [userData.role]);
+
+    return (
+        <div className="w-full max-w-4xl p-6 bg-gray-800/50 rounded-2xl border border-gray-700/50 shadow-2xl">
+            <h1 className="text-3xl font-bold text-purple-300 mb-2 flex items-center gap-3"><ShieldAlert /> Personal Security Center</h1>
+            <p className="text-gray-400 mb-6">AI-generated security protocols tailored to your role.</p>
+            {loading ? (
+                <div className="flex justify-center items-center h-64">
+                    <Loader2 className="animate-spin text-purple-400" size={48} />
+                </div>
+            ) : (
+                <div className="bg-gray-900/50 p-6 rounded-lg border border-gray-700 prose prose-invert max-w-none">
+                    <div dangerouslySetInnerHTML={{ __html: advice.replace(/\n/g, '<br />') }} />
+                </div>
+            )}
+        </div>
+    );
+};
+
 
 // --- UTILITY & HELPER COMPONENTS ---
 const FactCheckCard = ({ result }) => {
@@ -2161,6 +2510,29 @@ const FactCheckCard = ({ result }) => {
         </div>
     );
 };
+
+const Modal = ({ title, message, onClose, onConfirm }) => (
+    <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 animate-fade-in">
+        <div className="bg-gray-800 rounded-lg shadow-2xl p-8 max-w-md w-full mx-4 border border-cyan-500/50">
+            <div className="flex items-center mb-4">
+                <Info className="text-cyan-400 text-3xl mr-4" />
+                <h2 className="text-2xl font-bold text-cyan-300">{title}</h2>
+            </div>
+            <p className="text-gray-300 mb-6">{message}</p>
+            <div className={`flex ${onConfirm ? 'justify-between' : 'justify-end'}`}>
+                {onConfirm && (
+                    <button onClick={onClose} className="bg-gray-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-gray-700 transition-colors">
+                        Cancel
+                    </button>
+                )}
+                <button onClick={onConfirm || onClose} className="bg-cyan-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-cyan-500 transition-colors">
+                    {onConfirm ? 'Confirm' : 'OK'}
+                </button>
+            </div>
+        </div>
+    </div>
+);
+
 
 const ErrorModal = ({ error, onClose }) => {
     if (!error) return null;
@@ -2252,6 +2624,7 @@ const GlobalStyles = () => {
           @keyframes fade-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
           .animate-fade-in { animation: fade-in 0.5s ease-out forwards; }
           .prose { color: #d1d5db; } .prose strong { color: #ffffff; } .prose li::marker { color: #22d3ee; } .prose a { color: #22d3ee; } .prose a:hover { color: #67e8f9; }
+          .prose h2 { color: #9ca3af; } .prose h3 { color: #9ca3af; }
           .form-radio { appearance: none; display: inline-block; width: 1.25em; height: 1.25em; border-radius: 50%; border: 2px solid #4b5563; vertical-align: middle; transition: all 0.2s; }
           .form-radio:checked { background-color: #06b6d4; border-color: #0891b2; background-image: url("data:image/svg+xml,%3csvg viewBox='0 0 16 16' fill='white' xmlns='http://www.w3.org/2000/svg'%3e%3ccircle cx='8' cy='8' r='3'/%3e%3c/svg%3e"); }
           .bg-grid { background-image: radial-gradient(circle at 1px 1px, rgba(200, 200, 200, 0.1) 1px, transparent 0); background-size: 2rem 2rem; }
