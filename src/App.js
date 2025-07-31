@@ -368,7 +368,7 @@ const PublicSidebar = ({ activeView, setActiveView }) => (
             <NavItem icon={Wifi} label="System Status" view={CONSTANTS.VIEWS.STATUS} activeView={activeView} onClick={() => setActiveView(CONSTANTS.VIEWS.STATUS)} />
             <NavItem icon={Info} label="About the Project" view={CONSTANTS.VIEWS.ABOUT} activeView={activeView} onClick={() => setActiveView(CONSTANTS.VIEWS.ABOUT)} />
         </ul>
-        <div className="mt-auto text-center text-xs text-gray-500"><p>Version 5.0.0</p><p>Resilient. Secure. Intelligent.</p></div>
+        <div className="mt-auto text-center text-xs text-gray-500"><p>Version 5.0.1</p><p>Resilient. Secure. Intelligent.</p></div>
     </nav>
 );
 
@@ -855,7 +855,10 @@ const ArticleManagement = ({ onNewArticle, onArticleSelect }) => {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        if (!isAuthReady || !user || !db) return;
+        if (!isAuthReady || !user?.uid || !db) {
+            setLoading(false);
+            return;
+        }
         
         const myArticlesQuery = query(collection(db, CONSTANTS.COLLECTIONS.ARTICLES), where('authorUid', '==', user.uid));
         const unsubMy = onSnapshot(myArticlesQuery, (snap) => {
@@ -864,14 +867,32 @@ const ArticleManagement = ({ onNewArticle, onArticleSelect }) => {
             setMyArticles(articles);
             setLoading(false);
         }, err => {
-            console.error(err);
+            console.error("Error fetching my articles:", err);
             setLoading(false);
         });
 
-        const pendingQuery = query(collection(db, CONSTANTS.COLLECTIONS.ARTICLES), where('status', '==', 'pending_approval'));
+        // --- IMPORTANT ---
+        // This query fetches articles for community review.
+        // It specifically requests documents where the status is 'pending_approval' AND the author is NOT the current user.
+        // This query WILL FAIL with a "Missing or insufficient permissions" error if your
+        // Firestore Security Rules do not explicitly allow a user to perform a query
+        // that filters on one field ('status') and uses an inequality on another ('authorUid').
+        // Ensure your rules allow authenticated journalists to read all 'pending_approval' documents.
+        const pendingQuery = query(
+            collection(db, CONSTANTS.COLLECTIONS.ARTICLES), 
+            where('status', '==', 'pending_approval')
+        );
         const unsubPending = onSnapshot(pendingQuery, (snap) => {
-            setPendingArticles(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })).filter(art => art.authorUid !== user.uid));
-        }, err => console.error(err));
+            // We filter client-side because a query with `where('authorUid', '!=', user.uid)` can be complex
+            // and often requires a composite index, which can't be created from the app.
+            // The security rules MUST allow reading all pending articles for this to work.
+            const filteredArticles = snap.docs
+                .map(doc => ({ id: doc.id, ...doc.data() }))
+                .filter(art => art.authorUid !== user.uid);
+            setPendingArticles(filteredArticles);
+        }, err => {
+            console.error("Error fetching pending articles for review. This is likely a Firestore Security Rules issue.", err);
+        });
 
         return () => { unsubMy(); unsubPending(); };
     }, [isAuthReady, user, db]);
@@ -1977,39 +1998,57 @@ const FactCheckCard = ({ result }) => {
 
 const ErrorModal = ({ error, onClose }) => {
     if (!error) return null;
-    const handleFirebaseError = (err) => {
-        let message = "An unknown error occurred.";
-        let solution = "Please try again later or contact support.";
-        switch (err.code) {
-            case 'auth/user-not-found': 
-            case 'auth/wrong-password': 
-            case 'auth/invalid-credential':
-                message = 'Invalid Credentials.'; 
-                solution = 'Please double-check your email and password. Ensure you are using the correct login method.'; 
-                break;
-            case 'auth/invalid-email': 
-                message = 'Invalid Email Format.'; 
-                solution = 'Please enter a valid email address (e.g., user@example.com).'; 
-                break;
-            case 'auth/email-already-in-use': 
-                message = 'Email Already in Use.'; 
-                solution = 'An account with this email already exists. Please try logging in or use a different email address.'; 
-                break;
-            case 'permission-denied': 
-                message = 'Permission Denied.'; 
-                solution = 'You do not have the necessary permissions for this action. This is likely due to Firestore security rules. Please check the Firestore rules in your Firebase console to ensure the logged-in user has permission to perform this query.'; 
-                break;
-            case 'unavailable':
-                message = 'Service Unavailable';
-                solution = 'The Firebase service is currently unavailable. This is likely a temporary issue. Please try again in a few moments.';
-                break;
-            default: 
-                message = err.message || message; 
-                break;
-        }
-        return { title: message, solution, code: err.code };
+
+    const FIREBASE_ERRORS = {
+        'auth/user-not-found': {
+            title: 'User Not Found',
+            solution: 'The email address you entered does not exist. Please check the email or sign up for a new account.'
+        },
+        'auth/wrong-password': {
+            title: 'Incorrect Password',
+            solution: 'The password you entered is incorrect. Please try again or use the "Forgot Password" option if available.'
+        },
+        'auth/invalid-credential': {
+            title: 'Invalid Credentials',
+            solution: 'The email or password you entered is incorrect. Please double-check your credentials and try again.'
+        },
+        'auth/invalid-email': {
+            title: 'Invalid Email Format',
+            solution: 'Please enter a valid email address (e.g., user@example.com).'
+        },
+        'auth/email-already-in-use': {
+            title: 'Email Already in Use',
+            solution: 'An account with this email already exists. Please try logging in or use a different email address.'
+        },
+        'auth/weak-password': {
+            title: 'Weak Password',
+            solution: 'The password is not strong enough. It must be at least 6 characters long.'
+        },
+        'storage/unauthorized': {
+            title: 'Storage Access Denied',
+            solution: 'You are not authorized to access this file. Please check your permissions or contact the file owner.'
+        },
+        'storage/object-not-found': {
+            title: 'File Not Found',
+            solution: 'The file you are trying to access does not exist in our records. It may have been moved or deleted.'
+        },
     };
-    const { title, solution, code } = handleFirebaseError(error);
+
+    const getErrorDetails = (err) => {
+        const knownError = FIREBASE_ERRORS[err.code];
+        if (knownError) {
+            return { ...knownError, code: err.code };
+        }
+        // Fallback for any other Firebase error not in our list, especially permission errors.
+        return {
+            title: 'A Firebase Error Occurred',
+            solution: `The operation failed with the following message: "${err.message}". This is often due to Firestore Security Rules. Your query might be trying to access data you don't have permission to read (e.g., asking for all articles instead of just your own). Please check the query and your security rules.`,
+            code: err.code || 'UNKNOWN_ERROR'
+        };
+    };
+
+    const { title, solution, code } = getErrorDetails(error);
+
     return (
         <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 animate-fade-in">
             <div className="bg-gray-800 rounded-lg shadow-2xl p-8 max-w-md w-full mx-4 border border-red-500/50">
@@ -2023,7 +2062,7 @@ const ErrorModal = ({ error, onClose }) => {
                         <p>{title}</p>
                     </div>
                     <div>
-                        <strong className="font-semibold text-gray-200 block">Solution:</strong>
+                        <strong className="font-semibold text-gray-200 block">Suggested Solution:</strong>
                         <p>{solution}</p>
                     </div>
                     {code && (
@@ -2038,6 +2077,7 @@ const ErrorModal = ({ error, onClose }) => {
         </div>
     );
 };
+
 
 const GlobalStyles = () => {
     useEffect(() => {
