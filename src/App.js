@@ -32,7 +32,16 @@ import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from 'fire
 // In a real React project, these would be in a `.env.local` file at the project root.
 // Example: REACT_APP_FIREBASE_API_KEY="your_key_here"
 // This file should be added to .gitignore to keep keys secure.
-
+// --- Firebase Configuration ---
+// This configuration now reads from the simulated environment variables.
+const firebaseConfig = {
+  apiKey: process_env.REACT_APP_FIREBASE_API_KEY,
+  authDomain: process_env.REACT_APP_FIREBASE_AUTH_DOMAIN,
+  projectId: process_env.REACT_APP_FIREBASE_PROJECT_ID,
+  storageBucket: process_env.REACT_APP_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process_env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process_env.REACT_APP_FIREBASE_APP_ID,
+};
 
 
 // --- App Constants ---
@@ -79,16 +88,7 @@ const CONSTANTS = {
 };
 
 
-// --- Firebase Configuration ---
-// This configuration now reads from the simulated environment variables.
-const firebaseConfig = {
-  apiKey: process_env.REACT_APP_FIREBASE_API_KEY,
-  authDomain: process_env.REACT_APP_FIREBASE_AUTH_DOMAIN,
-  projectId: process_env.REACT_APP_FIREBASE_PROJECT_ID,
-  storageBucket: process_env.REACT_APP_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process_env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process_env.REACT_APP_FIREBASE_APP_ID,
-};
+
 
 
 // --- Gemini API Helper ---
