@@ -1,5 +1,5 @@
 import React, { useState, useEffect, createContext, useContext, useRef } from 'react';
-import { Shield, UploadCloud, Cpu, Wifi, Bot, AlertTriangle, CheckCircle, X, Loader2, Info, PlusCircle, Trash2, Newspaper, UserCheck, LogOut, Briefcase, Check, LogIn, MessageSquare, Link, BookLock, Save, Folder, File, ListTodo, Lock, Edit, Sparkles } from 'lucide-react';
+import { Shield, UploadCloud, Cpu, Wifi, Bot, AlertTriangle, CheckCircle, X, Loader2, Info, PlusCircle, Trash2, Newspaper, UserCheck, LogOut, Briefcase, Check, LogIn, MessageSquare, Link, BookLock, Save, Folder, File, ListTodo, Lock, Edit, Sparkles, Gauge, Gavel, SearchCode, BarChart, Siren } from 'lucide-react';
 
 // --- Firebase Imports (Using modern v9+ modular SDK) ---
 import { initializeApp } from 'firebase/app';
@@ -29,7 +29,52 @@ import {
 import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 
 
+// --- App Constants ---
+// It's best practice to keep constants in a separate file (e.g., `constants.js`)
+const CONSTANTS = {
+    ROLES: {
+        JOURNALIST: 'journalist',
+        HRD: 'hrd',
+    },
+    VIEWS: {
+        // Public
+        FACT_CHECKER: 'fact-checker',
+        NEWS: 'news',
+        PORTALS: 'portals',
+        STATUS: 'status',
+        ABOUT: 'about',
+        CHAT_INVITE: 'chat-invite',
+        CASE_CHAT_INVITE: 'case-chat-invite',
+        // Journalist
+        JOURNALIST_PORTAL: 'journalist-portal',
+        COMMS: 'comms',
+        VAULT: 'vault',
+        ARTICLE_EDITOR: 'articleEditor',
+        ARTICLE_VIEW: 'articleView',
+        THREAT_INTEL: 'threat-intel',
+        SOURCE_VETTING: 'source-vetting',
+        DATA_STUDIO: 'data-studio',
+        // HRD
+        HRD_PORTAL: 'hrd-portal',
+        CASE_VIEW: 'caseView',
+        NEW_CASE: 'newCase',
+        RISK_ANALYSIS: 'risk-analysis',
+        LEGAL_AI: 'legal-ai',
+    },
+    COLLECTIONS: {
+        USERS: 'users',
+        ARTICLES: 'articles',
+        PROJECTS: 'projects',
+        CONVERSATIONS: 'conversations',
+        CASES: 'cases',
+        CASE_CHATS: 'caseChats',
+    }
+};
+
+
 // --- Firebase Configuration ---
+// IMPORTANT: In a real-world application, never commit API keys to a public repository.
+// Use environment variables (e.g., a .env file) for security.
 const firebaseConfig = {
   apiKey: "AIzaSyAIcU46cd9mY6Q9rbvWK4KYWPWRqAGtbYg",
   authDomain: "chimtest-6854a.firebaseapp.com",
@@ -39,8 +84,11 @@ const firebaseConfig = {
   appId: "1:178975469028:web:fe72c902fb4b321a082bf1",
 };
 
+
 // --- Gemini API Helper ---
 const callGeminiAPI = async (prompt, maxRetries = 3) => {
+    // IMPORTANT: In a production environment, you should use a backend proxy to call the Gemini API. 
+    // Exposing an API key on the client-side, even from environment variables, is a security risk.
     const apiKey = ""; // This will be handled by the environment.
     const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
     
@@ -63,11 +111,10 @@ const callGeminiAPI = async (prompt, maxRetries = 3) => {
 
             const result = await response.json();
             
-            if (result.candidates && result.candidates.length > 0 &&
-                result.candidates[0].content && result.candidates[0].content.parts &&
-                result.candidates[0].content.parts.length > 0) {
+            if (result.candidates?.[0]?.content?.parts?.[0]?.text) {
                 return result.candidates[0].content.parts[0].text;
             } else {
+                console.warn("Gemini API response is missing expected content:", result);
                 throw new Error("Invalid response structure from Gemini API");
             }
         } catch (error) {
@@ -76,17 +123,53 @@ const callGeminiAPI = async (prompt, maxRetries = 3) => {
             if (attempt >= maxRetries) {
                 throw new Error("Gemini API call failed after multiple retries.");
             }
-            // Exponential backoff
             const delay = Math.pow(2, attempt) * 1000;
             await new Promise(resolve => setTimeout(resolve, delay));
         }
     }
 };
 
+// --- Custom Hooks ---
+/**
+ * A custom hook to subscribe to Firestore queries in real-time.
+ * @param {object} firestoreQuery - A Firestore query object created with query().
+ * @returns {{data: Array, loading: boolean, error: Error|null}}
+ */
+const useFirestoreQuery = (firestoreQuery) => {
+    const [data, setData] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+
+    useEffect(() => {
+        if (!firestoreQuery) {
+            setLoading(false);
+            return;
+        }
+        
+        setLoading(true);
+        const unsubscribe = onSnapshot(firestoreQuery, 
+            (querySnapshot) => {
+                const fetchedData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                setData(fetchedData);
+                setLoading(false);
+            }, 
+            (err) => {
+                console.error("Firestore query error:", err);
+                setError(err);
+                setLoading(false);
+            }
+        );
+
+        return () => unsubscribe();
+    }, [firestoreQuery]); // Re-run effect if the query object changes
+
+    return { data, loading, error };
+};
+
 
 // --- Firebase Context for global state management ---
 const FirebaseContext = createContext(null);
-const useFirebase = () => useContext(FirebaseContext);
+export const useFirebase = () => useContext(FirebaseContext);
 
 const FirebaseProvider = ({ children }) => {
     const [auth, setAuth] = useState(null);
@@ -111,13 +194,9 @@ const FirebaseProvider = ({ children }) => {
             const unsubscribe = onAuthStateChanged(authInstance, (firebaseUser) => {
                 setUser(firebaseUser);
                 if (firebaseUser) {
-                    const userDocRef = doc(dbInstance, 'users', firebaseUser.uid);
+                    const userDocRef = doc(dbInstance, CONSTANTS.COLLECTIONS.USERS, firebaseUser.uid);
                     const unsubUser = onSnapshot(userDocRef, (userDocSnap) => {
-                        if (userDocSnap.exists()) {
-                            setUserData(userDocSnap.data());
-                        } else {
-                            setUserData(null);
-                        }
+                        setUserData(userDocSnap.exists() ? userDocSnap.data() : null);
                         setIsAuthReady(true);
                         setLoading(false);
                     }, (error) => {
@@ -150,6 +229,7 @@ const FirebaseProvider = ({ children }) => {
     );
 };
 
+
 // --- Error Boundary ---
 class ErrorBoundary extends React.Component {
     constructor(props) { super(props); this.state = { hasError: false, error: null }; }
@@ -163,6 +243,7 @@ class ErrorBoundary extends React.Component {
     }
 }
 
+
 // --- Main App Component ---
 function AppWrapper() {
     return (
@@ -174,8 +255,8 @@ function AppWrapper() {
 }
 
 function App() {
-  const { user, loading, isAuthReady } = useFirebase();
-  const [activeView, setActiveView] = useState('fact-checker');
+  const { user, loading, userData, isAuthReady } = useFirebase();
+  const [activeView, setActiveView] = useState(CONSTANTS.VIEWS.FACT_CHECKER);
   const [activeId, setActiveId] = useState(null);
 
   useEffect(() => {
@@ -183,10 +264,10 @@ function App() {
     const chatId = params.get('chatId');
     const caseChatId = params.get('caseChatId');
     if (chatId) {
-        setActiveView('chat-invite');
+        setActiveView(CONSTANTS.VIEWS.CHAT_INVITE);
         setActiveId(chatId);
     } else if (caseChatId) {
-        setActiveView('case-chat-invite');
+        setActiveView(CONSTANTS.VIEWS.CASE_CHAT_INVITE);
         setActiveId(caseChatId);
     }
   }, []);
@@ -194,43 +275,62 @@ function App() {
   const handleNavigate = (view, id = null) => {
     setActiveView(view);
     setActiveId(id);
-  }
-
-  const handleSelect = (id, view) => {
-    setActiveId(id);
-    setActiveView(view);
+    window.scrollTo(0, 0); // Scroll to top on view change
   }
 
   if (loading || !isAuthReady) {
       return <div className="w-screen h-screen flex items-center justify-center bg-gray-900 text-cyan-400"><Loader2 size={48} className="animate-spin" /></div>;
   }
 
-  // --- Anonymous Views ---
-  if (activeView === 'chat-invite') return <ChatInviteHandler chatId={activeId} />;
-  if (activeView === 'case-chat-invite') return <CaseChatInviteHandler caseChatId={activeId} />;
-  if (!user) return <PublicLayout activeView={activeView} setActiveView={handleNavigate} />;
-
+  // --- Anonymous/Public Views ---
+  if (activeView === CONSTANTS.VIEWS.CHAT_INVITE) return <ChatInviteHandler chatId={activeId} />;
+  if (activeView === CONSTANTS.VIEWS.CASE_CHAT_INVITE) return <CaseChatInviteHandler caseChatId={activeId} />;
+  
+  if (!user) {
+      return <PublicLayout activeView={activeView} setActiveView={handleNavigate} />;
+  }
+  
   // --- Authenticated Views ---
+  const renderActiveView = () => {
+    // A switch statement is often cleaner for routing logic
+    switch (activeView) {
+        // General
+        case CONSTANTS.VIEWS.NEWS: return <CommunityNews onArticleSelect={(id) => handleNavigate(CONSTANTS.VIEWS.ARTICLE_VIEW, id)} />;
+        case CONSTANTS.VIEWS.ABOUT: return <AboutProject />;
+        
+        // Journalist
+        case CONSTANTS.VIEWS.JOURNALIST_PORTAL: return <JournalistDashboard onNavigate={handleNavigate} />;
+        case CONSTANTS.VIEWS.COMMS: return <ConversationManager />;
+        case CONSTANTS.VIEWS.VAULT: return <SecureVault />;
+        case CONSTANTS.VIEWS.ARTICLE_EDITOR: return <ArticleEditor articleId={activeId} onBack={() => handleNavigate(CONSTANTS.VIEWS.JOURNALIST_PORTAL)} />;
+        case CONSTANTS.VIEWS.ARTICLE_VIEW: return <ArticleView articleId={activeId} onBack={() => handleNavigate(CONSTANTS.VIEWS.JOURNALIST_PORTAL)} onEdit={(id) => handleNavigate(CONSTANTS.VIEWS.ARTICLE_EDITOR, id)} />;
+        case CONSTANTS.VIEWS.THREAT_INTEL: return <ThreatIntelDashboard />;
+        case CONSTANTS.VIEWS.SOURCE_VETTING: return <SourceVettingDashboard />;
+        case CONSTANTS.VIEWS.DATA_STUDIO: return <DataStudio />;
+        
+        // HRD
+        case CONSTANTS.VIEWS.HRD_PORTAL: return <HRDDashboard onCaseSelect={(id) => handleNavigate(CONSTANTS.VIEWS.CASE_VIEW, id)} onNewCase={() => handleNavigate(CONSTANTS.VIEWS.NEW_CASE)} />;
+        case CONSTANTS.VIEWS.CASE_VIEW: return <CaseView caseId={activeId} onBack={() => handleNavigate(CONSTANTS.VIEWS.HRD_PORTAL)} />;
+        case CONSTANTS.VIEWS.NEW_CASE: return <NewCase onBack={() => handleNavigate(CONSTANTS.VIEWS.HRD_PORTAL)} />;
+        case CONSTANTS.VIEWS.RISK_ANALYSIS: return <RiskAnalysisDashboard />;
+        case CONSTANTS.VIEWS.LEGAL_AI: return <LegalAidAI />;
+
+        default:
+            // Default to the user's main dashboard
+            if (userData?.role === CONSTANTS.ROLES.JOURNALIST) return <JournalistDashboard onNavigate={handleNavigate} />;
+            if (userData?.role === CONSTANTS.ROLES.HRD) return <HRDDashboard onCaseSelect={(id) => handleNavigate(CONSTANTS.VIEWS.CASE_VIEW, id)} onNewCase={() => handleNavigate(CONSTANTS.VIEWS.NEW_CASE)} />;
+            return <CommunityNews onArticleSelect={(id) => handleNavigate(CONSTANTS.VIEWS.ARTICLE_VIEW, id)} />;
+    }
+  };
+
   return (
     <div className="bg-gray-900 text-gray-200 font-sans min-h-screen flex w-full h-screen">
       <LoggedInSidebar activeView={activeView} setActiveView={handleNavigate} />
       <div className="flex-1 flex flex-col h-screen">
         <Header />
-        <main className="flex-grow p-4 md:p-8 flex items-start justify-center overflow-y-auto">
+        <main className="flex-grow p-4 md:p-8 flex items-start justify-center overflow-y-auto bg-grid">
           <ErrorBoundary key={activeView + activeId}>
-            {activeView === 'news' && <CommunityNews onArticleSelect={(id) => handleSelect(id, 'articleView')} />}
-            {/* Journalist Views */}
-            {activeView === 'journalist-portal' && <JournalistDashboard onNavigate={handleNavigate} onSelect={handleSelect} />}
-            {activeView === 'comms' && <ConversationManager />}
-            {activeView === 'vault' && <SecureVault />}
-            {activeView === 'articleEditor' && <ArticleEditor articleId={activeId} onBack={() => handleNavigate('journalist-portal')} />}
-            {activeView === 'articleView' && <ArticleView articleId={activeId} onBack={() => handleNavigate('journalist-portal')} onEdit={(id) => handleNavigate('articleEditor', id)} />}
-            {/* HRD Views */}
-            {activeView === 'hrd-portal' && <HRDDashboard onCaseSelect={(id) => handleSelect(id, 'caseView')} onNewCase={() => setActiveView('newCase')} />}
-            {activeView === 'caseView' && <CaseView caseId={activeId} onBack={() => handleNavigate('hrd-portal')} />}
-            {activeView === 'newCase' && <NewCase onBack={() => handleNavigate('hrd-portal')} />}
-            {/* General View */}
-            {activeView === 'about' && <AboutProject />}
+            {renderActiveView()}
           </ErrorBoundary>
         </main>
       </div>
@@ -238,19 +338,20 @@ function App() {
   );
 }
 
+
 // --- Navigation & Layout ---
 const PublicLayout = ({ activeView, setActiveView }) => (
     <div className="bg-gray-900 text-gray-200 font-sans min-h-screen flex w-full h-screen">
         <PublicSidebar activeView={activeView} setActiveView={setActiveView} />
         <div className="flex-1 flex flex-col h-screen">
             <Header />
-            <main className="flex-grow p-4 md:p-8 flex items-start justify-center overflow-y-auto">
+            <main className="flex-grow p-4 md:p-8 flex items-start justify-center overflow-y-auto bg-grid">
                 <ErrorBoundary key={activeView}>
-                    {activeView === 'fact-checker' && <FactChecker />}
-                    {activeView === 'news' && <CommunityNews onArticleSelect={() => {}} />}
-                    {activeView === 'portals' && <Portals onNavigate={setActiveView} />}
-                    {activeView === 'status' && <SystemStatus />}
-                    {activeView === 'about' && <AboutProject />}
+                    {activeView === CONSTANTS.VIEWS.FACT_CHECKER && <FactChecker />}
+                    {activeView === CONSTANTS.VIEWS.NEWS && <CommunityNews onArticleSelect={() => {}} />}
+                    {activeView === CONSTANTS.VIEWS.PORTALS && <Portals onNavigate={setActiveView} />}
+                    {activeView === CONSTANTS.VIEWS.STATUS && <SystemStatus />}
+                    {activeView === CONSTANTS.VIEWS.ABOUT && <AboutProject />}
                 </ErrorBoundary>
             </main>
         </div>
@@ -261,13 +362,13 @@ const PublicSidebar = ({ activeView, setActiveView }) => (
     <nav className="w-64 bg-gray-900/80 border-r border-gray-700/50 flex-shrink-0 flex flex-col p-4">
         <div className="flex items-center space-x-3 mb-10 px-2"><Shield className="text-cyan-400" size={32} /><h1 className="text-xl font-bold tracking-wider text-gray-50">Chimera</h1></div>
         <ul className="space-y-2 flex-grow">
-            <NavItem icon={Cpu} label="Fact-Checker" view="fact-checker" activeView={activeView} onClick={() => setActiveView('fact-checker')} />
-            <NavItem icon={Newspaper} label="Verified News" view="news" activeView={activeView} onClick={() => setActiveView('news')} />
-            <NavItem icon={LogIn} label="Portals" view="portals" activeView={activeView} onClick={() => setActiveView('portals')} />
-            <NavItem icon={Wifi} label="System Status" view="status" activeView={activeView} onClick={() => setActiveView('status')} />
-            <NavItem icon={Info} label="About the Project" view="about" activeView={activeView} onClick={() => setActiveView('about')} />
+            <NavItem icon={Cpu} label="Fact-Checker" view={CONSTANTS.VIEWS.FACT_CHECKER} activeView={activeView} onClick={() => setActiveView(CONSTANTS.VIEWS.FACT_CHECKER)} />
+            <NavItem icon={Newspaper} label="Verified News" view={CONSTANTS.VIEWS.NEWS} activeView={activeView} onClick={() => setActiveView(CONSTANTS.VIEWS.NEWS)} />
+            <NavItem icon={LogIn} label="Portals" view={CONSTANTS.VIEWS.PORTALS} activeView={activeView} onClick={() => setActiveView(CONSTANTS.VIEWS.PORTALS)} />
+            <NavItem icon={Wifi} label="System Status" view={CONSTANTS.VIEWS.STATUS} activeView={activeView} onClick={() => setActiveView(CONSTANTS.VIEWS.STATUS)} />
+            <NavItem icon={Info} label="About the Project" view={CONSTANTS.VIEWS.ABOUT} activeView={activeView} onClick={() => setActiveView(CONSTANTS.VIEWS.ABOUT)} />
         </ul>
-        <div className="mt-auto text-center text-xs text-gray-500"><p>Version 4.1.0</p><p>Resilient. Secure. Open.</p></div>
+        <div className="mt-auto text-center text-xs text-gray-500"><p>Version 5.0.0</p><p>Resilient. Secure. Intelligent.</p></div>
     </nav>
 );
 
@@ -275,37 +376,53 @@ const LoggedInSidebar = ({ activeView, setActiveView }) => {
     const { auth, userData } = useFirebase();
     const handleSignOut = async () => {
         await firebaseSignOut(auth);
+        setActiveView(CONSTANTS.VIEWS.FACT_CHECKER); // Reset view on logout
     };
 
+    const isJournalist = userData?.role === CONSTANTS.ROLES.JOURNALIST;
+    const isHrd = userData?.role === CONSTANTS.ROLES.HRD;
+
     return (
-        <nav className="w-64 bg-gray-900/80 border-r border-gray-700/50 flex-shrink-0 flex flex-col p-4">
-            <div className="flex items-center space-x-3 mb-10 px-2"><Shield className="text-cyan-400" size={32} /><h1 className="text-xl font-bold tracking-wider text-gray-50">Chimera</h1></div>
+        <nav className="w-64 bg-gray-900/80 border-r border-gray-700/50 flex-shrink-0 flex flex-col p-4 overflow-y-auto">
+            <div className="flex items-center space-x-3 mb-10 px-2">
+                <Shield className="text-cyan-400" size={32} />
+                <h1 className="text-xl font-bold tracking-wider text-gray-50">Chimera</h1>
+            </div>
             
             <ul className="space-y-1 flex-grow">
                 {/* General Section */}
-                <NavItem icon={Newspaper} label="Verified News" view="news" activeView={activeView} onClick={() => setActiveView('news')} />
+                <NavItem icon={Newspaper} label="Verified News" view={CONSTANTS.VIEWS.NEWS} activeView={activeView} onClick={() => setActiveView(CONSTANTS.VIEWS.NEWS)} />
 
                 {/* Journalist Section */}
-                {userData?.role === 'journalist' && (
+                {isJournalist && (
                     <>
                         <li className="px-3 pt-4 pb-2 text-xs font-bold text-gray-500 uppercase tracking-wider">Journalist Tools</li>
-                        <NavItem icon={Folder} label="Projects" view="journalist-portal" activeView={activeView} onClick={() => setActiveView('journalist-portal')} />
-                        <NavItem icon={MessageSquare} label="Secure Comms" view="comms" activeView={activeView} onClick={() => setActiveView('comms')} />
-                        <NavItem icon={BookLock} label="Secure Vault" view="vault" activeView={activeView} onClick={() => setActiveView('vault')} />
+                        <NavItem icon={Folder} label="Projects" view={CONSTANTS.VIEWS.JOURNALIST_PORTAL} activeView={activeView} onClick={() => setActiveView(CONSTANTS.VIEWS.JOURNALIST_PORTAL)} />
+                        <NavItem icon={MessageSquare} label="Secure Comms" view={CONSTANTS.VIEWS.COMMS} activeView={activeView} onClick={() => setActiveView(CONSTANTS.VIEWS.COMMS)} />
+                        <NavItem icon={BookLock} label="Secure Vault" view={CONSTANTS.VIEWS.VAULT} activeView={activeView} onClick={() => setActiveView(CONSTANTS.VIEWS.VAULT)} />
+                        
+                        <li className="px-3 pt-4 pb-2 text-xs font-bold text-purple-400 uppercase tracking-wider">Intelligence Suite</li>
+                        <NavItem icon={SearchCode} label="Threat Intel" view={CONSTANTS.VIEWS.THREAT_INTEL} activeView={activeView} onClick={() => setActiveView(CONSTANTS.VIEWS.THREAT_INTEL)} />
+                        <NavItem icon={UserCheck} label="Source Vetting" view={CONSTANTS.VIEWS.SOURCE_VETTING} activeView={activeView} onClick={() => setActiveView(CONSTANTS.VIEWS.SOURCE_VETTING)} />
+                        <NavItem icon={BarChart} label="Data Studio" view={CONSTANTS.VIEWS.DATA_STUDIO} activeView={activeView} onClick={() => setActiveView(CONSTANTS.VIEWS.DATA_STUDIO)} />
                     </>
                 )}
 
                 {/* HRD Section */}
-                {userData?.role === 'hrd' && (
-                     <>
+                {isHrd && (
+                    <>
                         <li className="px-3 pt-4 pb-2 text-xs font-bold text-gray-500 uppercase tracking-wider">HRD Tools</li>
-                        <NavItem icon={Briefcase} label="Case Dashboard" view="hrd-portal" activeView={activeView} onClick={() => setActiveView('hrd-portal')} />
-                     </>
+                        <NavItem icon={Briefcase} label="Case Dashboard" view={CONSTANTS.VIEWS.HRD_PORTAL} activeView={activeView} onClick={() => setActiveView(CONSTANTS.VIEWS.HRD_PORTAL)} />
+                        
+                        <li className="px-3 pt-4 pb-2 text-xs font-bold text-purple-400 uppercase tracking-wider">Assistance Suite</li>
+                        <NavItem icon={Gauge} label="Risk Analysis" view={CONSTANTS.VIEWS.RISK_ANALYSIS} activeView={activeView} onClick={() => setActiveView(CONSTANTS.VIEWS.RISK_ANALYSIS)} />
+                        <NavItem icon={Gavel} label="Legal Aid AI" view={CONSTANTS.VIEWS.LEGAL_AI} activeView={activeView} onClick={() => setActiveView(CONSTANTS.VIEWS.LEGAL_AI)} />
+                    </>
                 )}
                 
                 {/* Project Info Section */}
                 <li className="px-3 pt-4 pb-2 text-xs font-bold text-gray-500 uppercase tracking-wider">Project</li>
-                <NavItem icon={Info} label="About Chimera" view="about" activeView={activeView} onClick={() => setActiveView('about')} />
+                <NavItem icon={Info} label="About Chimera" view={CONSTANTS.VIEWS.ABOUT} activeView={activeView} onClick={() => setActiveView(CONSTANTS.VIEWS.ABOUT)} />
             </ul>
 
             <div className="mt-auto">
@@ -384,14 +501,14 @@ const SignUp = ({ onLoginNavigate }) => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [displayName, setDisplayName] = useState('');
-    const [role, setRole] = useState('journalist');
+    const [role, setRole] = useState(CONSTANTS.ROLES.JOURNALIST);
     const [error, setError] = useState(null);
     const [loading, setLoading] = useState(false);
     const handleSignUp = async (e) => {
         e.preventDefault(); setLoading(true); setError(null);
         try {
             const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-            await setDoc(doc(db, 'users', userCredential.user.uid), {
+            await setDoc(doc(db, CONSTANTS.COLLECTIONS.USERS, userCredential.user.uid), {
                 uid: userCredential.user.uid, displayName, email, role, createdAt: serverTimestamp(),
             });
         } catch (err) {
@@ -407,8 +524,8 @@ const SignUp = ({ onLoginNavigate }) => {
                     <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="Email Address" className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-cyan-500" required />
                     <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Password (min. 6 characters)" className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-cyan-500" required />
                     <div className="flex items-center justify-around text-gray-300">
-                        <label className="flex items-center space-x-2"><input type="radio" name="role" value="journalist" checked={role === 'journalist'} onChange={e => setRole(e.target.value)} className="form-radio text-cyan-500 bg-gray-700 border-gray-600" /><span>Journalist</span></label>
-                        <label className="flex items-center space-x-2"><input type="radio" name="role" value="hrd" checked={role === 'hrd'} onChange={e => setRole(e.target.value)} className="form-radio text-cyan-500 bg-gray-700 border-gray-600" /><span>HR Defender</span></label>
+                        <label className="flex items-center space-x-2"><input type="radio" name="role" value={CONSTANTS.ROLES.JOURNALIST} checked={role === CONSTANTS.ROLES.JOURNALIST} onChange={e => setRole(e.target.value)} className="form-radio text-cyan-500 bg-gray-700 border-gray-600" /><span>Journalist</span></label>
+                        <label className="flex items-center space-x-2"><input type="radio" name="role" value={CONSTANTS.ROLES.HRD} checked={role === CONSTANTS.ROLES.HRD} onChange={e => setRole(e.target.value)} className="form-radio text-cyan-500 bg-gray-700 border-gray-600" /><span>HR Defender</span></label>
                     </div>
                     <button type="submit" disabled={loading} className="w-full bg-cyan-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-cyan-500 transition-colors disabled:bg-gray-600">
                         {loading ? <Loader2 className="animate-spin mx-auto" /> : 'Sign Up'}
@@ -436,7 +553,8 @@ const FactChecker = () => {
             setPreviewUrl(URL.createObjectURL(file));
             setAnalysisReport(null);
         } else {
-            alert("Please select a valid image or video file.");
+            // Replace alert with a more modern notification system in a real app
+            console.warn("Please select a valid image or video file.");
         }
     };
 
@@ -444,6 +562,7 @@ const FactChecker = () => {
         if (!selectedFile) return;
         setIsAnalyzing(true);
         setAnalysisReport(null);
+        // Mocking API call to Aegis Engine
         await new Promise(resolve => setTimeout(resolve, 2000));
         const mockReport = {
             score: ["High Confidence", "Suspicious", "Manipulation Detected"][Math.floor(Math.random() * 3)],
@@ -491,25 +610,113 @@ const FactChecker = () => {
     );
 };
 
-const SystemStatus = () => (
-    <div className="w-full max-w-4xl bg-gray-800/50 rounded-2xl border border-gray-700/50 shadow-2xl shadow-black/20 p-8">
-        <h2 className="text-3xl font-bold text-cyan-300 mb-6">System Status</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="bg-gray-900/70 p-6 rounded-lg text-center border border-green-500/30">
-                <h3 className="font-semibold text-gray-400 mb-2">Overall Status</h3>
-                <p className="text-2xl font-bold text-green-400 flex items-center justify-center gap-2"><CheckCircle /> Operational</p>
+// A simple sparkline component for the new status page
+const Sparkline = ({ data, color = "#06b6d4", width = 100, height = 30 }) => {
+    if (!data || data.length < 2) return null;
+    const max = Math.max(...data);
+    const min = Math.min(...data);
+    const points = data.map((d, i) => {
+        const x = (i / (data.length - 1)) * width;
+        const y = height - ((d - min) / (max - min || 1) * height);
+        return `${x},${y}`;
+    }).join(' ');
+
+    return <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}><polyline fill="none" stroke={color} strokeWidth="2" points={points}/></svg>;
+}
+
+const SystemStatus = () => {
+    const [metrics, setMetrics] = useState({
+        latency: { value: 50, history: [55, 52, 60, 54, 50], color: 'text-green-400' },
+        nodes: { value: 247, history: [220, 231, 225, 240, 247], color: 'text-green-400' },
+        threat: { level: 'Low', color: 'text-green-400' },
+        dbOps: { value: 12, history: [10, 15, 8, 14, 12], color: 'text-green-400' }
+    });
+
+    useEffect(() => {
+        const interval = setInterval(() => {
+            setMetrics(prev => {
+                const newLatency = Math.max(20, prev.latency.value + (Math.random() - 0.5) * 10);
+                const newNodes = Math.max(100, prev.nodes.value + (Math.random() - 0.4) * 5);
+                const newDbOps = Math.max(5, prev.dbOps.value + (Math.random() - 0.5) * 4);
+                return {
+                    latency: {
+                        value: Math.round(newLatency),
+                        history: [...prev.latency.history.slice(1), newLatency],
+                        color: newLatency > 150 ? 'text-red-400' : newLatency > 80 ? 'text-amber-400' : 'text-green-400'
+                    },
+                    nodes: {
+                        value: Math.round(newNodes),
+                        history: [...prev.nodes.history.slice(1), newNodes],
+                        color: newNodes < 150 ? 'text-amber-400' : 'text-green-400'
+                    },
+                    threat: prev.threat, // Keep threat level static for demo
+                    dbOps: {
+                        value: Math.round(newDbOps),
+                        history: [...prev.dbOps.history.slice(1), newDbOps],
+                        color: newDbOps > 50 ? 'text-amber-400' : 'text-green-400'
+                    }
+                };
+            });
+        }, 2000);
+        return () => clearInterval(interval);
+    }, []);
+    
+    const StatusCard = ({ icon: Icon, title, value, unit, sparklineData, color, children }) => (
+        <div className="bg-gray-800/70 p-6 rounded-xl border border-gray-700/60 backdrop-blur-sm flex flex-col justify-between hover:bg-gray-700/50 transition-colors">
+            <div>
+                <div className="flex items-center justify-between text-gray-400 font-semibold text-sm">
+                    <span>{title}</span>
+                    <Icon className={color} size={20} />
+                </div>
+                <div className={`text-4xl font-bold ${color} mt-2`}>
+                    {value} <span className="text-xl text-gray-400">{unit}</span>
+                </div>
             </div>
-            <div className="bg-gray-900/70 p-6 rounded-lg text-center border border-green-500/30">
-                <h3 className="font-semibold text-gray-400 mb-2">P2P Fabric</h3>
-                <p className="text-2xl font-bold text-green-400 flex items-center justify-center gap-2"><Wifi /> Healthy</p>
-            </div>
-            <div className="bg-gray-900/70 p-6 rounded-lg text-center border border-green-500/30">
-                <h3 className="font-semibold text-gray-400 mb-2">Aegis Engine</h3>
-                <p className="text-2xl font-bold text-green-400 flex items-center justify-center gap-2"><Bot /> Online</p>
+            <div className="mt-4 h-[30px]">
+                {sparklineData ? <Sparkline data={sparklineData} color={color.startsWith('text-green') ? '#34d399' : color.startsWith('text-amber') ? '#fbbf24' : '#f87171'} /> : children}
             </div>
         </div>
-    </div>
-);
+    );
+
+    const eventLog = [
+        { time: '21:14:00 SAST', msg: 'System check complete. All services nominal.', type: 'info' },
+        { time: '21:12:30 SAST', msg: 'P2P node count increased to 249.', type: 'info' },
+        { time: '21:10:01 SAST', msg: 'Minor latency fluctuation detected in EU-West-1.', type: 'warn' },
+        { time: '21:05:33 SAST', msg: 'Aegis Engine model updated to v5.0.0.', type: 'info' },
+    ];
+
+    return (
+        <div className="w-full max-w-6xl p-4 space-y-8">
+            <div className="text-center">
+                 <h2 className="text-4xl font-bold text-cyan-300 mb-2">System Network Status</h2>
+                 <p className="text-gray-400">Live metrics from the Chimera decentralized network.</p>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <StatusCard icon={Wifi} title="P2P Network Latency" value={metrics.latency.value} unit="ms" sparklineData={metrics.latency.history} color={metrics.latency.color} />
+                <StatusCard icon={Bot} title="Aegis Engine Ops/Sec" value={metrics.dbOps.value} unit="" sparklineData={metrics.dbOps.history} color={metrics.dbOps.color} />
+                <StatusCard icon={Cpu} title="Active P2P Nodes" value={metrics.nodes.value} unit="" sparklineData={metrics.nodes.history} color={metrics.nodes.color} />
+                <StatusCard icon={Siren} title="Network Threat Level" value={metrics.threat.level} unit="" color={metrics.threat.color}>
+                    <div className="w-full bg-gray-700 rounded-full h-2.5 mt-4">
+                        <div className="bg-green-500 h-2.5 rounded-full" style={{ width: '15%' }}></div>
+                    </div>
+                </StatusCard>
+            </div>
+            
+            <div className="bg-gray-800/70 p-6 rounded-xl border border-gray-700/60 backdrop-blur-sm">
+                <h3 className="text-xl font-semibold text-gray-300 mb-4">System Event Log</h3>
+                <ul className="space-y-3 font-mono text-sm">
+                    {eventLog.map((event, i) => (
+                        <li key={i} className="flex items-center gap-4">
+                            <span className="text-gray-500">{event.time}</span>
+                            <span className={event.type === 'warn' ? 'text-amber-400' : 'text-gray-300'}>{event.msg}</span>
+                        </li>
+                    ))}
+                </ul>
+            </div>
+        </div>
+    );
+};
 
 const CommunityNews = ({ onArticleSelect }) => {
     const { db } = useFirebase();
@@ -518,7 +725,7 @@ const CommunityNews = ({ onArticleSelect }) => {
 
     useEffect(() => {
         if (!db) return;
-        const q = query(collection(db, 'articles'), where('status', '==', 'published'), orderBy('publishedAt', 'desc'));
+        const q = query(collection(db, CONSTANTS.COLLECTIONS.ARTICLES), where('status', '==', 'published'), orderBy('publishedAt', 'desc'));
         const unsubscribe = onSnapshot(q, (querySnapshot) => {
             setArticles(querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
             setLoading(false);
@@ -533,14 +740,14 @@ const CommunityNews = ({ onArticleSelect }) => {
                 {loading ? <div className="flex justify-center items-center h-full"><Loader2 className="animate-spin text-cyan-400" size={48} /></div> :
                  articles.length === 0 ? <p className="text-gray-500 text-center mt-8">No articles published yet.</p> :
                  <div className="space-y-4">
-                    {articles.map(article => (
-                        <div key={article.id} onClick={() => onArticleSelect && onArticleSelect(article.id)} className={`bg-gray-900/70 p-4 rounded-lg ${onArticleSelect ? 'cursor-pointer hover:bg-gray-700/50' : ''}`}>
-                            <h3 className="text-xl font-bold text-white">{article.title}</h3>
-                            <p className="text-sm text-gray-400 mt-1">By {article.authorName} &bull; Published on {article.publishedAt?.toDate().toLocaleDateString()}</p>
-                            <p className="text-gray-300 mt-3 whitespace-pre-wrap line-clamp-2" dangerouslySetInnerHTML={{ __html: article.content.substring(0, 300) }}></p>
-                            <div className="mt-3 text-sm text-green-400 flex items-center gap-2"><Check size={16}/> Community Verified ({article.approvals?.length || 0} approvals)</div>
-                        </div>
-                    ))}
+                     {articles.map(article => (
+                         <div key={article.id} onClick={() => onArticleSelect && onArticleSelect(article.id)} className={`bg-gray-900/70 p-4 rounded-lg ${onArticleSelect ? 'cursor-pointer hover:bg-gray-700/50' : ''}`}>
+                             <h3 className="text-xl font-bold text-white">{article.title}</h3>
+                             <p className="text-sm text-gray-400 mt-1">By {article.authorName} &bull; Published on {article.publishedAt?.toDate().toLocaleDateString()}</p>
+                             <p className="text-gray-300 mt-3 whitespace-pre-wrap line-clamp-2" dangerouslySetInnerHTML={{ __html: article.content?.substring(0, 300) || "" }}></p>
+                             <div className="mt-3 text-sm text-green-400 flex items-center gap-2"><Check size={16}/> Community Verified ({article.approvals?.length || 0} approvals)</div>
+                         </div>
+                     ))}
                  </div>
                 }
             </div>
@@ -567,7 +774,7 @@ const AboutProject = () => (
 
 // --- JOURNALIST PORTAL ---
 
-const JournalistDashboard = ({ onNavigate, onSelect }) => {
+const JournalistDashboard = ({ onNavigate }) => {
     const [activeTab, setActiveTab] = useState('projects');
     const TabButton = ({ view, label, icon: Icon }) => (
         <button onClick={() => setActiveTab(view)} className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-t-lg border-b-2 transition-colors ${activeTab === view ? 'text-cyan-300 border-cyan-300' : 'text-gray-400 border-transparent hover:text-white'}`}>
@@ -580,27 +787,23 @@ const JournalistDashboard = ({ onNavigate, onSelect }) => {
             <div className="border-b border-gray-700 flex">
                 <TabButton view="projects" label="Projects" icon={Folder} />
                 <TabButton view="articles" label="All Articles" icon={Newspaper} />
-                <TabButton view="comms" label="Secure Comms" icon={MessageSquare} />
-                <TabButton view="vault" label="Secure Vault" icon={BookLock} />
             </div>
             <div className="pt-6">
-                {activeTab === 'projects' && <ProjectManagement onNavigate={onNavigate} onSelect={onSelect} />}
-                {activeTab === 'articles' && <ArticleManagement onNewArticle={() => onNavigate('articleEditor')} onArticleSelect={(id) => onSelect(id, 'articleView')} />}
-                {activeTab === 'comms' && <ConversationManager />}
-                {activeTab === 'vault' && <SecureVault />}
+                {activeTab === 'projects' && <ProjectManagement onNavigate={onNavigate} />}
+                {activeTab === 'articles' && <ArticleManagement onNewArticle={() => onNavigate(CONSTANTS.VIEWS.ARTICLE_EDITOR)} onArticleSelect={(id) => onNavigate(CONSTANTS.VIEWS.ARTICLE_VIEW, id)} />}
             </div>
         </div>
     );
 };
 
-const ProjectManagement = ({ onNavigate, onSelect }) => {
+const ProjectManagement = ({ onNavigate }) => {
     const { db, user, isAuthReady } = useFirebase();
     const [projects, setProjects] = useState([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         if (!isAuthReady || !user || !db) return;
-        const q = query(collection(db, 'projects'), where('authorUid', '==', user.uid), orderBy('createdAt', 'desc'));
+        const q = query(collection(db, CONSTANTS.COLLECTIONS.PROJECTS), where('authorUid', '==', user.uid), orderBy('createdAt', 'desc'));
         const unsubscribe = onSnapshot(q, snap => {
             setProjects(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
             setLoading(false);
@@ -614,7 +817,7 @@ const ProjectManagement = ({ onNavigate, onSelect }) => {
     const handleNewProject = async () => {
         const title = prompt("New project title:");
         if (title && user && db) {
-            await addDoc(collection(db, 'projects'), {
+            await addDoc(collection(db, CONSTANTS.COLLECTIONS.PROJECTS), {
                 title,
                 authorUid: user.uid,
                 createdAt: serverTimestamp(),
@@ -634,7 +837,7 @@ const ProjectManagement = ({ onNavigate, onSelect }) => {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {projects.map(proj => (
-                    <div key={proj.id} onClick={() => onNavigate('articleEditor', { projectId: proj.id })} className="bg-gray-900/70 p-4 rounded-lg cursor-pointer hover:bg-gray-700/50">
+                    <div key={proj.id} onClick={() => onNavigate(CONSTANTS.VIEWS.ARTICLE_EDITOR, { projectId: proj.id })} className="bg-gray-900/70 p-4 rounded-lg cursor-pointer hover:bg-gray-700/50">
                         <h3 className="font-bold text-white">{proj.title}</h3>
                         <p className="text-sm text-gray-400">Created: {proj.createdAt?.toDate().toLocaleDateString()}</p>
                     </div>
@@ -654,7 +857,7 @@ const ArticleManagement = ({ onNewArticle, onArticleSelect }) => {
     useEffect(() => {
         if (!isAuthReady || !user || !db) return;
         
-        const myArticlesQuery = query(collection(db, 'articles'), where('authorUid', '==', user.uid));
+        const myArticlesQuery = query(collection(db, CONSTANTS.COLLECTIONS.ARTICLES), where('authorUid', '==', user.uid));
         const unsubMy = onSnapshot(myArticlesQuery, (snap) => {
             const articles = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             articles.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
@@ -665,7 +868,7 @@ const ArticleManagement = ({ onNewArticle, onArticleSelect }) => {
             setLoading(false);
         });
 
-        const pendingQuery = query(collection(db, 'articles'), where('status', '==', 'pending_approval'));
+        const pendingQuery = query(collection(db, CONSTANTS.COLLECTIONS.ARTICLES), where('status', '==', 'pending_approval'));
         const unsubPending = onSnapshot(pendingQuery, (snap) => {
             setPendingArticles(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })).filter(art => art.authorUid !== user.uid));
         }, err => console.error(err));
@@ -736,7 +939,7 @@ const ArticleView = ({ articleId, onBack, onEdit }) => {
 
     useEffect(() => {
         if (!db || !articleId) return;
-        const docRef = doc(db, 'articles', articleId);
+        const docRef = doc(db, CONSTANTS.COLLECTIONS.ARTICLES, articleId);
         const unsubscribe = onSnapshot(docRef, (docSnap) => {
             if (docSnap.exists()) setArticle({ id: docSnap.id, ...docSnap.data() });
             else setError({ message: "Article not found." });
@@ -748,7 +951,7 @@ const ArticleView = ({ articleId, onBack, onEdit }) => {
     const handleApprove = async () => {
         setIsApproving(true); setError(null);
         try {
-            const articleRef = doc(db, 'articles', articleId);
+            const articleRef = doc(db, CONSTANTS.COLLECTIONS.ARTICLES, articleId);
             const newApprovalCount = (article.approvals?.length || 0) + 1;
             const updatePayload = { approvals: arrayUnion(user.uid) };
             if (newApprovalCount >= 5) {
@@ -761,8 +964,9 @@ const ArticleView = ({ articleId, onBack, onEdit }) => {
     };
 
     const handleDelete = async () => {
+        // Use a custom modal instead of window.confirm in a real app
         if (window.confirm("Are you sure you want to permanently delete this article?")) {
-            try { await deleteDoc(doc(db, 'articles', articleId)); onBack(); } 
+            try { await deleteDoc(doc(db, CONSTANTS.COLLECTIONS.ARTICLES, articleId)); onBack(); } 
             catch (err) { setError(err); }
         }
     };
@@ -785,7 +989,7 @@ const ArticleView = ({ articleId, onBack, onEdit }) => {
     if (!article) return <p className="text-red-400">{error?.message || "Could not load article."}</p>;
 
     const isAuthor = article.authorUid === user.uid;
-    const canApprove = userData.role === 'journalist' && !isAuthor && article.status === 'pending_approval' && !(article.approvals?.includes(user.uid));
+    const canApprove = userData.role === CONSTANTS.ROLES.JOURNALIST && !isAuthor && article.status === 'pending_approval' && !(article.approvals?.includes(user.uid));
 
     return (
         <>
@@ -795,7 +999,7 @@ const ArticleView = ({ articleId, onBack, onEdit }) => {
                 <div className="flex justify-between items-start">
                     <h1 className="text-4xl font-extrabold text-white mb-4">{article.title}</h1>
                     <button onClick={handleSummarize} className="flex items-center gap-2 bg-purple-600 text-white font-bold py-2 px-3 rounded-lg hover:bg-purple-700 transition-colors text-sm">
-                        <Sparkles size={16} /> ✨ AI Summary
+                        <Sparkles size={16} /> AI Summary
                     </button>
                 </div>
                 <div className="flex justify-between items-center text-sm text-gray-400 mb-6 border-b border-gray-700 pb-4">
@@ -849,7 +1053,7 @@ const ArticleEditor = ({ articleId, onBack }) => {
     useEffect(() => {
         if (articleId) {
             setLoading(true);
-            const docRef = doc(db, 'articles', articleId);
+            const docRef = doc(db, CONSTANTS.COLLECTIONS.ARTICLES, articleId);
             getDoc(docRef).then(docSnap => {
                 if (docSnap.exists()) {
                     const data = docSnap.data();
@@ -887,11 +1091,11 @@ const ArticleEditor = ({ articleId, onBack }) => {
             };
 
             if (articleId) {
-                await updateDoc(doc(db, 'articles', articleId), articleData);
+                await updateDoc(doc(db, CONSTANTS.COLLECTIONS.ARTICLES, articleId), articleData);
             } else {
                 articleData.createdAt = serverTimestamp();
                 articleData.approvals = [];
-                await addDoc(collection(db, 'articles'), articleData);
+                await addDoc(collection(db, CONSTANTS.COLLECTIONS.ARTICLES), articleData);
             }
             onBack();
         } catch (err) { setError(err); } 
@@ -945,7 +1149,7 @@ const ConversationManager = () => {
 
     useEffect(() => {
         if(!user || !db) return;
-        const q = query(collection(db, 'conversations'), where('journalistUid', '==', user.uid), orderBy('createdAt', 'desc'));
+        const q = query(collection(db, CONSTANTS.COLLECTIONS.CONVERSATIONS), where('journalistUid', '==', user.uid), orderBy('createdAt', 'desc'));
         const unsubscribe = onSnapshot(q, (snap) => {
             setConversations(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
             setLoading(false);
@@ -956,7 +1160,7 @@ const ConversationManager = () => {
     const createNewConversation = async () => {
         const sourceName = prompt("Enter a temporary name for this source (e.g., 'Whistleblower X'):", "Anonymous Source");
         if (sourceName && user && db) {
-            const newConvoRef = await addDoc(collection(db, 'conversations'), {
+            const newConvoRef = await addDoc(collection(db, CONSTANTS.COLLECTIONS.CONVERSATIONS), {
                 journalistUid: user.uid,
                 sourceDisplayName: sourceName,
                 createdAt: serverTimestamp(),
@@ -996,7 +1200,7 @@ const ChatWindow = ({ conversation, onBack }) => {
     const messagesEndRef = useRef(null);
 
     useEffect(() => {
-        const messagesCol = collection(db, 'conversations', conversation.id, 'messages');
+        const messagesCol = collection(db, CONSTANTS.COLLECTIONS.CONVERSATIONS, conversation.id, 'messages');
         const q = query(messagesCol, orderBy('timestamp'));
         const unsubscribe = onSnapshot(q, (snap) => setMessages(snap.docs.map(doc => doc.data())));
         return () => unsubscribe();
@@ -1009,7 +1213,7 @@ const ChatWindow = ({ conversation, onBack }) => {
     const handleSendMessage = async (e) => {
         e.preventDefault();
         if (newMessage.trim() === '') return;
-        const messagesCol = collection(db, 'conversations', conversation.id, 'messages');
+        const messagesCol = collection(db, CONSTANTS.COLLECTIONS.CONVERSATIONS, conversation.id, 'messages');
         await addDoc(messagesCol, {
             text: newMessage,
             sender: 'journalist',
@@ -1067,10 +1271,10 @@ const ChatInviteHandler = ({ chatId }) => {
                 setLoading(false);
                 return;
             }
-            const convoRef = doc(db, 'conversations', chatId);
+            const convoRef = doc(db, CONSTANTS.COLLECTIONS.CONVERSATIONS, chatId);
             const convoSnap = await getDoc(convoRef);
             if (convoSnap.exists()) {
-                const messagesCol = collection(db, 'conversations', chatId, 'messages');
+                const messagesCol = collection(db, CONSTANTS.COLLECTIONS.CONVERSATIONS, chatId, 'messages');
                 const q = query(messagesCol, orderBy('timestamp'));
                 onSnapshot(q, (snap) => setMessages(snap.docs.map(doc => doc.data())));
             } else {
@@ -1088,7 +1292,7 @@ const ChatInviteHandler = ({ chatId }) => {
     const handleSendMessage = async (e) => {
         e.preventDefault();
         if (newMessage.trim() === '') return;
-        const messagesCol = collection(db, 'conversations', chatId, 'messages');
+        const messagesCol = collection(db, CONSTANTS.COLLECTIONS.CONVERSATIONS, chatId, 'messages');
         await addDoc(messagesCol, {
             text: newMessage,
             sender: 'source',
@@ -1216,7 +1420,7 @@ const HRDDashboard = ({ onCaseSelect, onNewCase }) => {
 
     useEffect(() => {
         if (!isAuthReady || !user || !db) return;
-        const q = query(collection(db, 'cases'), where('assignedToUid', '==', user.uid));
+        const q = query(collection(db, CONSTANTS.COLLECTIONS.CASES), where('assignedToUid', '==', user.uid));
         const unsubscribe = onSnapshot(q, (snap) => {
             const caseData = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             caseData.sort((a, b) => (b.lastUpdatedAt?.seconds || 0) - (a.lastUpdatedAt?.seconds || 0));
@@ -1273,7 +1477,7 @@ const NewCase = ({ onBack }) => {
     const handleSubmit = async (e) => {
         e.preventDefault(); setLoading(true);
         try {
-            await addDoc(collection(db, 'cases'), {
+            await addDoc(collection(db, CONSTANTS.COLLECTIONS.CASES), {
                 caseTitle, description, caseId: `CASE-${Date.now()}`, status: 'new',
                 assignedToUid: user.uid, createdAt: serverTimestamp(), lastUpdatedAt: serverTimestamp(),
             });
@@ -1308,7 +1512,7 @@ const CaseView = ({ caseId, onBack }) => {
     const [isAnalyzing, setIsAnalyzing] = useState(false);
 
     useEffect(() => {
-        const caseRef = doc(db, 'cases', caseId);
+        const caseRef = doc(db, CONSTANTS.COLLECTIONS.CASES, caseId);
         const unsubscribe = onSnapshot(caseRef, (snap) => {
             if (snap.exists()) setCaseData({ id: snap.id, ...snap.data() });
             setLoading(false);
@@ -1357,12 +1561,14 @@ const CaseView = ({ caseId, onBack }) => {
             <div className="border-b border-gray-700 flex mb-6">
                 <TabButton view="details" label="Details" icon={Info} />
                 <TabButton view="evidence" label="Evidence Locker" icon={Lock} />
+                <TabButton view="audit" label="Audit Trail" icon={Shield} />
                 <TabButton view="tasks" label="Action Items" icon={ListTodo} />
                 <TabButton view="chat" label="Secure Chat" icon={MessageSquare} />
             </div>
             <div className="bg-gray-800/50 p-6 rounded-b-lg shadow-lg border-x border-b border-gray-700/50">
                 {activeTab === 'details' && <CaseDetails caseData={caseData} />}
                 {activeTab === 'evidence' && <EvidenceLocker caseId={caseId} />}
+                {activeTab === 'audit' && <EvidenceAuditTrail caseId={caseId} />}
                 {activeTab === 'tasks' && <CaseTasks caseId={caseId} />}
                 {activeTab === 'chat' && <CaseChat caseId={caseId} />}
             </div>
@@ -1569,14 +1775,14 @@ const CaseChatInviteHandler = ({ caseChatId }) => {
                 setLoading(false);
                 return;
             }
-            const caseRef = doc(db, 'cases', caseChatId);
+            const caseRef = doc(db, CONSTANTS.COLLECTIONS.CASES, caseChatId);
             const caseSnap = await getDoc(caseRef);
             if (!caseSnap.exists()) {
                 setError("This secure chat link is invalid or the case has been closed.");
                 setLoading(false);
                 return;
             }
-            const messagesCol = collection(db, 'caseChats', caseChatId, 'messages');
+            const messagesCol = collection(db, CONSTANTS.COLLECTIONS.CASE_CHATS, caseChatId, 'messages');
             const q = query(messagesCol, orderBy('timestamp'));
             onSnapshot(q, (snap) => setMessages(snap.docs.map(doc => doc.data())));
             setLoading(false);
@@ -1591,7 +1797,7 @@ const CaseChatInviteHandler = ({ caseChatId }) => {
     const handleSendMessage = async (e) => {
         e.preventDefault();
         if (newMessage.trim() === '') return;
-        await addDoc(collection(db, 'caseChats', caseChatId, 'messages'), {
+        await addDoc(collection(db, CONSTANTS.COLLECTIONS.CASE_CHATS, caseChatId, 'messages'), {
             text: newMessage,
             sender: 'client',
             timestamp: serverTimestamp(),
@@ -1624,23 +1830,139 @@ const CaseChatInviteHandler = ({ caseChatId }) => {
     );
 };
 
-// --- UTILITY & HELPER COMPONENTS ---
-const aegisEngine = {
-  getFactCheckResult: async (mediaFile) => {
-    console.log("Submitting media to Aegis Engine for deep analysis...");
-    await new Promise(resolve => setTimeout(resolve, 2000 + Math.random() * 1500));
-    const mockScores = ["High Confidence", "Suspicious", "Manipulation Detected"];
-    const mockDetails = {
-      "High Confidence": ["No anomalies detected.", "Source metadata verified.", "Consistent lighting and shadows."],
-      "Suspicious": ["Inconsistent compression artifacts found.", "Metadata appears to be stripped or altered.", "Unusual noise pattern detected."],
-      "Manipulation Detected": ["Signs of GAN-based facial synthesis detected.", "Inconsistent shadows and lighting suggest object insertion.", "Audio spectrogram shows signs of synthetic speech."]
-    };
-    const randomScore = mockScores[Math.floor(Math.random() * mockScores.length)];
-    const randomDetail = mockDetails[randomScore][Math.floor(Math.random() * mockDetails[randomScore].length)];
-    return { score: randomScore, details: [randomDetail], checkedAt: new Date().toISOString() };
-  }
+// --- NEW FUTURISTIC COMPONENTS ---
+
+const ThreatIntelDashboard = () => (
+    <div className="w-full max-w-5xl p-6 bg-gray-800/50 rounded-2xl border border-gray-700/50 shadow-2xl">
+        <h1 className="text-3xl font-bold text-purple-300 mb-2 flex items-center gap-3"><SearchCode /> Threat Intelligence</h1>
+        <p className="text-gray-400 mb-6">AI-driven monitoring of emergent misinformation campaigns.</p>
+        <div className="bg-purple-900/20 border border-purple-500/30 p-6 rounded-lg">
+            <h2 className="text-xl font-semibold text-purple-200">Active Campaign Detected: "Hydro-Contamination Hoax"</h2>
+            <p className="text-sm text-gray-400">First detected: 2025-07-30 14:00 SAST</p>
+            <div className="mt-4 grid grid-cols-3 gap-4 text-center">
+                <div><p className="text-2xl font-bold text-white">4.2K</p><p className="text-xs text-gray-400">Social Mentions (24h)</p></div>
+                <div><p className="text-2xl font-bold text-red-400">+78%</p><p className="text-xs text-gray-400">Velocity (24h)</p></div>
+                <div><p className="text-2xl font-bold text-amber-400">High</p><p className="text-xs text-gray-400">AI Confidence Score</p></div>
+            </div>
+            <p className="mt-4 text-gray-300">
+                <strong className="text-white">Narrative:</strong> A coordinated campaign is spreading false claims of industrial water contamination, using deepfaked videos of public officials. The campaign primarily targets users in the Gauteng region via WhatsApp and X (formerly Twitter).
+            </p>
+        </div>
+        <p className="text-center mt-8 text-gray-500">This is a conceptual feature. Live threat analysis is not yet implemented.</p>
+    </div>
+);
+
+
+const SourceVettingDashboard = () => (
+    <div className="w-full max-w-5xl p-6 bg-gray-800/50 rounded-2xl border border-gray-700/50 shadow-2xl">
+        <h1 className="text-3xl font-bold text-cyan-300 mb-2 flex items-center gap-3"><UserCheck /> Source Vetting AI</h1>
+        <p className="text-gray-400 mb-6">Analyze digital footprints to assess source credibility. All data is anonymized.</p>
+        {/* Mock UI for this feature */}
+        <div className="bg-gray-900/50 p-6 rounded-lg border border-gray-700">
+            <label htmlFor="source-id" className="font-semibold text-gray-300">Enter Anonymous Source ID or Comm Link</label>
+            <div className="flex gap-2 mt-2">
+                <input id="source-id" type="text" placeholder="e.g., chat-id-xyz789" className="flex-grow p-3 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500" />
+                <button className="bg-cyan-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-cyan-500">Analyze</button>
+            </div>
+            <p className="text-center mt-8 text-gray-500">This is a conceptual feature. Live source analysis is not yet implemented.</p>
+        </div>
+    </div>
+);
+
+const DataStudio = () => (
+     <div className="w-full max-w-5xl p-6 bg-gray-800/50 rounded-2xl border border-gray-700/50 shadow-2xl text-center">
+        <BarChart className="mx-auto text-cyan-400 mb-4" size={48}/>
+        <h1 className="text-3xl font-bold text-cyan-300 mb-2">Data Visualization Studio</h1>
+        <p className="text-gray-400">Feature coming soon.</p>
+        <p className="text-gray-500 mt-4">This studio will allow you to upload datasets (CSV, JSON) and generate interactive charts and maps to embed in your articles, helping to make complex data understandable to the public.</p>
+    </div>
+);
+
+const RiskAnalysisDashboard = () => (
+    <div className="w-full max-w-5xl p-6 bg-gray-800/50 rounded-2xl border border-gray-700/50 shadow-2xl">
+        <h1 className="text-3xl font-bold text-purple-300 mb-2 flex items-center gap-3"><Gauge /> Predictive Risk Analysis</h1>
+        <p className="text-gray-400 mb-6">AI-powered risk assessment for active cases.</p>
+        <div className="bg-red-900/20 border border-red-500/30 p-6 rounded-lg">
+            <h2 className="text-xl font-semibold text-red-200">High Risk Case: CASE-166845398271</h2>
+            <p className="text-sm text-gray-400">Last Assessed: 2025-07-31 09:00 SAST</p>
+            <div className="mt-4 grid grid-cols-3 gap-4">
+                <div><strong className="text-white block">Digital Threat</strong><span className="text-red-400">Severe</span></div>
+                <div><strong className="text-white block">Physical Threat</strong><span className="text-amber-400">Elevated</span></div>
+                <div><strong className="text-white block">Legal Threat</strong><span className="text-amber-400">Moderate</span></div>
+            </div>
+            <p className="mt-4 text-gray-300">
+                <strong className="text-white">Analysis:</strong> AI model indicates a high probability of targeted phishing attacks against the client. Increased online chatter from state-affiliated actors has been detected. Recommend immediate review of digital security protocols.
+            </p>
+        </div>
+         <p className="text-center mt-8 text-gray-500">This is a conceptual feature. Live risk analysis is not yet implemented.</p>
+    </div>
+);
+
+
+const LegalAidAI = () => (
+    <div className="w-full max-w-5xl p-6 bg-gray-800/50 rounded-2xl border border-gray-700/50 shadow-2xl">
+        <h1 className="text-3xl font-bold text-cyan-300 mb-2 flex items-center gap-3"><Gavel /> Legal Aid AI</h1>
+        <p className="text-gray-400 mb-6">Matches case details with relevant legal frameworks and support organizations.</p>
+        <div className="bg-gray-900/50 p-6 rounded-lg border border-gray-700">
+            <label htmlFor="case-id" className="font-semibold text-gray-300">Enter Case ID</label>
+            <div className="flex gap-2 mt-2">
+                <input id="case-id" type="text" placeholder="e.g., CASE-166845398271" className="flex-grow p-3 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500" />
+                <button className="bg-cyan-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-cyan-500">Find Resources</button>
+            </div>
+        </div>
+        <div className="mt-6 bg-gray-900/50 p-6 rounded-lg border border-gray-700">
+            <h2 className="font-semibold text-gray-200">Suggested Resources for CASE-166845398271:</h2>
+            <ul className="list-disc list-inside mt-2 text-gray-300 space-y-1">
+                <li><strong className="text-white">Relevant Framework:</strong> Protection of Personal Information Act (POPIA), 2013</li>
+                <li><strong className="text-white">Legal Precedent:</strong> *John Doe v. State Security Agency (2022)*</li>
+                <li><strong className="text-white">Partner Org:</strong> Lawyers for Human Rights (LHR) - Digital Rights Unit</li>
+            </ul>
+        </div>
+        <p className="text-center mt-8 text-gray-500">This is a conceptual feature. Live matching is not yet implemented.</p>
+    </div>
+);
+
+const EvidenceAuditTrail = ({ caseId }) => {
+    // In a real app, this data would come from a secure, append-only log or blockchain.
+    const mockAuditLog = [
+        { timestamp: "2025-07-31 09:05:11 SAST", user: "hrd.seed@chimera.test", action: "DOWNLOADED", file: "video_evidence_01.mp4", ip: "102.132.1.55", hash: "a1b2..." },
+        { timestamp: "2025-07-31 08:40:23 SAST", user: "hrd.seed@chimera.test", action: "UPLOADED", file: "video_evidence_01.mp4", ip: "102.132.1.55", hash: "a1b2..." },
+        { timestamp: "2025-07-30 16:12:45 SAST", user: "client_anonymous", action: "UPLOADED", file: "encrypted_docs.zip", ip: "197.80.5.12", hash: "f9e8..." },
+    ];
+
+    return (
+        <div>
+            <h3 className="text-xl font-bold text-gray-300 mb-4">Evidence Chain-of-Custody</h3>
+            <p className="text-sm text-gray-500 mb-4">This is an immutable log of all actions performed on evidence in this case.</p>
+            <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm font-mono">
+                    <thead className="border-b border-gray-600 text-gray-400">
+                        <tr>
+                            <th className="p-2">Timestamp</th>
+                            <th className="p-2">User/Entity</th>
+                            <th className="p-2">Action</th>
+                            <th className="p-2">File</th>
+                            <th className="p-2">IP Address</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-700">
+                        {mockAuditLog.map((log, i) => (
+                             <tr key={i}>
+                                <td className="p-2 text-gray-400">{log.timestamp}</td>
+                                <td className="p-2 text-white">{log.user}</td>
+                                <td className={`p-2 font-semibold ${log.action === 'UPLOADED' ? 'text-green-400' : 'text-amber-400'}`}>{log.action}</td>
+                                <td className="p-2 text-cyan-400">{log.file}</td>
+                                <td className="p-2 text-gray-500">{log.ip}</td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    );
 };
 
+// --- UTILITY & HELPER COMPONENTS ---
 const FactCheckCard = ({ result }) => {
     const scoreMeta = { "Manipulation Detected": { Icon: AlertTriangle, color: 'text-red-400', bgColor: 'bg-red-500/10' }, "Suspicious": { Icon: AlertTriangle, color: 'text-amber-400', bgColor: 'bg-amber-500/10' }, "High Confidence": { Icon: CheckCircle, color: 'text-green-400', bgColor: 'bg-green-500/10' }, }[result.score] || { Icon: Info, color: 'text-gray-400', bgColor: 'bg-gray-500/10' };
     return (
@@ -1726,6 +2048,7 @@ const GlobalStyles = () => {
           .prose { color: #d1d5db; } .prose strong { color: #ffffff; } .prose li::marker { color: #22d3ee; } .prose a { color: #22d3ee; } .prose a:hover { color: #67e8f9; }
           .form-radio { appearance: none; display: inline-block; width: 1.25em; height: 1.25em; border-radius: 50%; border: 2px solid #4b5563; vertical-align: middle; transition: all 0.2s; }
           .form-radio:checked { background-color: #06b6d4; border-color: #0891b2; background-image: url("data:image/svg+xml,%3csvg viewBox='0 0 16 16' fill='white' xmlns='http://www.w3.org/2000/svg'%3e%3ccircle cx='8' cy='8' r='3'/%3e%3c/svg%3e"); }
+          .bg-grid { background-image: radial-gradient(circle at 1px 1px, rgba(200, 200, 200, 0.1) 1px, transparent 0); background-size: 2rem 2rem; }
         `;
         document.head.appendChild(style);
         return () => document.head.removeChild(style);
