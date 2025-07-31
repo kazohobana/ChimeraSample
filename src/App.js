@@ -1193,7 +1193,7 @@ const ArticleEditor = ({ articleId, onBack }) => {
     );
 };
 
-const ConversationManager = () => {
+const ConversationManager = ({ onNavigate }) => {
     const { db, user } = useFirebase();
     const [conversations, setConversations] = useState([]);
     const [activeConvo, setActiveConvo] = useState(null);
