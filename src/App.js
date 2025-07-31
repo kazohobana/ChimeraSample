@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useContext, createContext, useRef } from 'react';
-import { Shield, UploadCloud, Cpu, Wifi, Bot, AlertTriangle, CheckCircle, BarChart, X, Loader2, Sparkles, History, BookLock, Info, PlusCircle, Trash2, MessageSquare, Send, User, ThumbsUp, ThumbsDown, FileSignature, Newspaper, Edit, BookOpen, Check, Server, Globe, UserCheck } from 'lucide-react';
+import React, { useState, useEffect, useContext, createContext } from 'react';
+import { Shield, UploadCloud, Cpu, Wifi, Bot, AlertTriangle, CheckCircle, BarChart, X, Loader2, History, BookLock, Info, PlusCircle, Trash2, MessageSquare, Send, User, ThumbsUp, ThumbsDown, FileSignature, Newspaper, Edit, BookOpen, Check, Server, Globe, UserCheck } from 'lucide-react';
 
 // --- Firebase Imports (Using modern v9+ modular SDK) ---
 import { initializeApp } from 'firebase/app';
@@ -39,14 +39,11 @@ const FirebaseProvider = ({ children }) => {
             setAuth(authInstance);
             setDb(dbInstance);
 
-            // Seed database with default users and data if they don't exist
-            seedDatabase(dbInstance);
-
             const unsubscribe = onAuthStateChanged(authInstance, (currentUser) => {
+                setUser(currentUser); // Will be null if not logged in
                 if (currentUser) {
-                    setUser(currentUser);
-                } else {
-                     signInAnonymously(authInstance).catch(error => console.error("Anonymous sign-in failed:", error));
+                    // Seed database only after a user is authenticated
+                    seedDatabase(dbInstance);
                 }
                 setLoading(false);
             });
@@ -181,7 +178,7 @@ const Sidebar = ({ activeView, setActiveView }) => (
 );
 
 const NavItem = ({ icon: Icon, label, view, activeView, onClick }) => (
-  <li><a href="#" onClick={(e) => { e.preventDefault(); onClick(); }} className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${activeView === view ? 'bg-cyan-600/20 text-cyan-300' : 'text-gray-400 hover:bg-gray-700/50 hover:text-gray-200'}`}><Icon size={20} /><span>{label}</span></a></li>
+  <li><button onClick={onClick} className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors text-left ${activeView === view ? 'bg-cyan-600/20 text-cyan-300' : 'text-gray-400 hover:bg-gray-700/50 hover:text-gray-200'}`}><Icon size={20} /><span>{label}</span></button></li>
 );
 
 const Header = () => {
@@ -320,7 +317,7 @@ const CommunityVault = () => {
             setIsLoading(false);
         }, () => setIsLoading(false));
         return () => unsubscribe();
-    }, [db, user]);
+    }, [db, user, activeNote]);
 
     const handleNewNote = async () => {
         if (!db || !user) return;
