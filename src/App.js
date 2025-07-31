@@ -1,5 +1,5 @@
 import React, { useState, useEffect, createContext, useContext, useRef } from 'react';
-import { Shield, UploadCloud, Cpu, Wifi, Bot, AlertTriangle, CheckCircle, X, Loader2, Info, PlusCircle, Trash2, Newspaper, UserCheck, LogOut, Briefcase, Check, LogIn, MessageSquare, Link, BookLock, Save, Folder, File, ListTodo, Lock, Edit, Sparkles, Gauge, Gavel, SearchCode, BarChart, Siren, Archive } from 'lucide-react';
+import { Shield, UploadCloud, Cpu, Wifi, Bot, AlertTriangle, CheckCircle, X, Loader2, Info, PlusCircle, Trash2, Newspaper, UserCheck, LogOut, Briefcase, Check, LogIn, MessageSquare, Link, BookLock, Save, Folder, File, ListTodo, Lock, Edit, Sparkles, Gauge, Gavel, SearchCode, BarChart, Siren, Archive, MapPin, Clock, Mic, Languages, ShieldAlert, Timer, Settings } from 'lucide-react';
 
 // --- Firebase Imports (Using modern v9+ modular SDK) ---
 import { initializeApp } from 'firebase/app';
@@ -61,6 +61,7 @@ const CONSTANTS = {
         RISK_ANALYSIS: 'risk-analysis',
         LEGAL_AI: 'legal-ai',
         CASE_VAULT: 'case-vault',
+        PERSONAL_SECURITY: 'personal-security',
     },
     COLLECTIONS: {
         USERS: 'users',
@@ -310,17 +311,18 @@ function App() {
         case CONSTANTS.VIEWS.DATA_STUDIO: return <DataStudio />;
         
         // HRD
-        case CONSTANTS.VIEWS.HRD_PORTAL: return <HRDDashboard onCaseSelect={(id) => handleNavigate(CONSTANTS.VIEWS.CASE_VIEW, id)} onNewCase={() => handleNavigate(CONSTANTS.VIEWS.NEW_CASE)} />;
+        case CONSTANTS.VIEWS.HRD_PORTAL: return <HRDDashboard onNavigate={handleNavigate} />;
         case CONSTANTS.VIEWS.CASE_VIEW: return <CaseView caseId={activeId} onBack={() => handleNavigate(CONSTANTS.VIEWS.HRD_PORTAL)} />;
         case CONSTANTS.VIEWS.NEW_CASE: return <NewCase onBack={() => handleNavigate(CONSTANTS.VIEWS.HRD_PORTAL)} />;
         case CONSTANTS.VIEWS.RISK_ANALYSIS: return <RiskAnalysisDashboard />;
         case CONSTANTS.VIEWS.LEGAL_AI: return <LegalAidAI />;
         case CONSTANTS.VIEWS.CASE_VAULT: return <CaseVault onCaseSelect={(id) => handleNavigate(CONSTANTS.VIEWS.CASE_VIEW, id)} onBack={() => handleNavigate(CONSTANTS.VIEWS.HRD_PORTAL)} />;
+        case CONSTANTS.VIEWS.PERSONAL_SECURITY: return <PersonalSecurityDashboard />;
 
         default:
             // Default to the user's main dashboard
             if (userData?.role === CONSTANTS.ROLES.JOURNALIST) return <JournalistDashboard onNavigate={handleNavigate} />;
-            if (userData?.role === CONSTANTS.ROLES.HRD) return <HRDDashboard onCaseSelect={(id) => handleNavigate(CONSTANTS.VIEWS.CASE_VIEW, id)} onNewCase={() => handleNavigate(CONSTANTS.VIEWS.NEW_CASE)} />;
+            if (userData?.role === CONSTANTS.ROLES.HRD) return <HRDDashboard onNavigate={handleNavigate} />;
             return <CommunityNews onArticleSelect={(id) => handleNavigate(CONSTANTS.VIEWS.ARTICLE_VIEW, id)} />;
     }
   };
@@ -370,7 +372,7 @@ const PublicSidebar = ({ activeView, setActiveView }) => (
             <NavItem icon={Wifi} label="System Status" view={CONSTANTS.VIEWS.STATUS} activeView={activeView} onClick={() => setActiveView(CONSTANTS.VIEWS.STATUS)} />
             <NavItem icon={Info} label="About the Project" view={CONSTANTS.VIEWS.ABOUT} activeView={activeView} onClick={() => setActiveView(CONSTANTS.VIEWS.ABOUT)} />
         </ul>
-        <div className="mt-auto text-center text-xs text-gray-500"><p>Version 5.0.1</p><p>Resilient. Secure. Intelligent.</p></div>
+        <div className="mt-auto text-center text-xs text-gray-500"><p>Version 5.1.0</p><p>Resilient. Secure. Intelligent.</p></div>
     </nav>
 );
 
@@ -415,11 +417,11 @@ const LoggedInSidebar = ({ activeView, setActiveView }) => {
                     <>
                         <li className="px-3 pt-4 pb-2 text-xs font-bold text-gray-500 uppercase tracking-wider">HRD Tools</li>
                         <NavItem icon={Briefcase} label="Case Dashboard" view={CONSTANTS.VIEWS.HRD_PORTAL} activeView={activeView} onClick={() => setActiveView(CONSTANTS.VIEWS.HRD_PORTAL)} />
-                        <NavItem icon={Archive} label="Case Vault" view={CONSTANTS.VIEWS.CASE_VAULT} activeView={activeView} onClick={() => setActiveView(CONSTANTS.VIEWS.CASE_VAULT)} />
                         
                         <li className="px-3 pt-4 pb-2 text-xs font-bold text-purple-400 uppercase tracking-wider">Assistance Suite</li>
                         <NavItem icon={Gauge} label="Risk Analysis" view={CONSTANTS.VIEWS.RISK_ANALYSIS} activeView={activeView} onClick={() => setActiveView(CONSTANTS.VIEWS.RISK_ANALYSIS)} />
                         <NavItem icon={Gavel} label="Legal Aid AI" view={CONSTANTS.VIEWS.LEGAL_AI} activeView={activeView} onClick={() => setActiveView(CONSTANTS.VIEWS.LEGAL_AI)} />
+                        <NavItem icon={ShieldAlert} label="Personal Security" view={CONSTANTS.VIEWS.PERSONAL_SECURITY} activeView={activeView} onClick={() => setActiveView(CONSTANTS.VIEWS.PERSONAL_SECURITY)} />
                     </>
                 )}
                 
@@ -440,10 +442,42 @@ const NavItem = ({ icon: Icon, label, view, activeView, onClick }) => (
 );
 
 const Header = () => {
+    const { userData } = useFirebase();
     const [p2pStatus, setP2pStatus] = useState('Connecting...');
     const [veritasStatus, setVeritasStatus] = useState('Standby');
-    useEffect(() => { setTimeout(() => setP2pStatus('Connected'), 1500); setTimeout(() => setVeritasStatus('Online'), 2000); }, []);
-    return (<header className="border-b border-gray-700/50 bg-gray-900/80 backdrop-blur-sm sticky top-0 z-30"><div className="container mx-auto px-4 py-3 flex justify-end items-center"><div className="flex items-center space-x-6 text-sm"><div className="flex items-center space-x-2" title="Aegis Engine Status"><Bot size={18} className={veritasStatus === 'Online' ? 'text-green-400' : 'text-amber-400'} /><span>Aegis: <span className={veritasStatus === 'Online' ? 'text-green-400' : 'text-amber-400'}>{veritasStatus}</span></span></div><div className="flex items-center space-x-2" title="P2P Network Status"><Wifi size={18} className={p2pStatus === 'Connected' ? 'text-green-400' : 'text-amber-400'} /><span>P2P: <span className={p2pStatus === 'Connected' ? 'text-green-400' : 'text-amber-400'}>{p2pStatus}</span></span></div></div></div></header>);
+    
+    useEffect(() => { 
+        setTimeout(() => setP2pStatus('Connected'), 1500); 
+        setTimeout(() => setVeritasStatus('Online'), 2000); 
+    }, []);
+
+    const handlePanic = () => {
+        // In a real app, this would trigger a more robust alert system
+        // (e.g., SMS via Twilio, push notifications, etc.)
+        alert("PANIC ALERT TRIGGERED!\n\nYour trusted contacts have been notified with your last known location.");
+    };
+
+    return (
+        <header className="border-b border-gray-700/50 bg-gray-900/80 backdrop-blur-sm sticky top-0 z-30">
+            <div className="container mx-auto px-4 py-3 flex justify-end items-center">
+                <div className="flex items-center space-x-6 text-sm">
+                    {userData?.role === CONSTANTS.ROLES.HRD && (
+                        <button onClick={handlePanic} className="flex items-center gap-2 bg-red-600/80 text-white font-bold py-2 px-3 rounded-lg hover:bg-red-500 transition-colors">
+                            <Siren size={16} /> PANIC
+                        </button>
+                    )}
+                    <div className="flex items-center space-x-2" title="Aegis Engine Status">
+                        <Bot size={18} className={veritasStatus === 'Online' ? 'text-green-400' : 'text-amber-400'} />
+                        <span>Aegis: <span className={veritasStatus === 'Online' ? 'text-green-400' : 'text-amber-400'}>{veritasStatus}</span></span>
+                    </div>
+                    <div className="flex items-center space-x-2" title="P2P Network Status">
+                        <Wifi size={18} className={p2pStatus === 'Connected' ? 'text-green-400' : 'text-amber-400'} />
+                        <span>P2P: <span className={p2pStatus === 'Connected' ? 'text-green-400' : 'text-amber-400'}>{p2pStatus}</span></span>
+                    </div>
+                </div>
+            </div>
+        </header>
+    );
 };
 
 // --- AUTHENTICATION COMPONENTS ---
@@ -1435,14 +1469,43 @@ const SecureVault = () => {
 
 // --- HRD PORTAL ---
 
-const HRDDashboard = ({ onCaseSelect, onNewCase }) => {
+const HRDDashboard = ({ onNavigate }) => {
+    const [activeTab, setActiveTab] = useState('active');
+    
+    const TabButton = ({ view, label, icon: Icon }) => (
+        <button onClick={() => setActiveTab(view)} className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-t-lg border-b-2 transition-colors ${activeTab === view ? 'text-cyan-300 border-cyan-300' : 'text-gray-400 border-transparent hover:text-white'}`}>
+            <Icon size={16} /> {label}
+        </button>
+    );
+
+    return (
+        <div className="w-full max-w-6xl p-6">
+            <div className="flex justify-between items-center mb-6">
+                <h1 className="text-3xl font-bold text-cyan-300">HRD Case Dashboard</h1>
+                <button onClick={() => onNavigate(CONSTANTS.VIEWS.NEW_CASE)} className="flex items-center bg-cyan-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-cyan-500 transition-colors">
+                    <PlusCircle className="mr-2" size={20}/> New Case
+                </button>
+            </div>
+            <div className="border-b border-gray-700 flex">
+                <TabButton view="active" label="Active Cases" icon={Briefcase} />
+                <TabButton view="vault" label="Case Vault" icon={Archive} />
+            </div>
+            <div className="pt-6">
+                {activeTab === 'active' && <ActiveCases onCaseSelect={(id) => onNavigate(CONSTANTS.VIEWS.CASE_VIEW, id)} />}
+                {activeTab === 'vault' && <CaseVault onCaseSelect={(id) => onNavigate(CONSTANTS.VIEWS.CASE_VIEW, id)} />}
+            </div>
+        </div>
+    );
+};
+
+const ActiveCases = ({ onCaseSelect }) => {
     const { db, user, isAuthReady } = useFirebase();
     const [cases, setCases] = useState([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         if (!isAuthReady || !user || !db) return;
-        const q = query(collection(db, CONSTANTS.COLLECTIONS.CASES), where('assignedToUid', '==', user.uid));
+        const q = query(collection(db, CONSTANTS.COLLECTIONS.CASES), where('assignedToUid', '==', user.uid), where('status', '!=', 'closed'));
         const unsubscribe = onSnapshot(q, (snap) => {
             const caseData = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             caseData.sort((a, b) => (b.lastUpdatedAt?.seconds || 0) - (a.lastUpdatedAt?.seconds || 0));
@@ -1459,32 +1522,60 @@ const HRDDashboard = ({ onCaseSelect, onNewCase }) => {
         const styles = {
             new: "text-blue-800 bg-blue-200",
             in_progress: "text-yellow-800 bg-yellow-200",
-            closed: "text-gray-800 bg-gray-300",
         };
-        return <span className={`px-2 py-1 text-xs font-semibold rounded-full ${styles[status] || styles.closed}`}>{status.replace('_', ' ')}</span>;
+        return <span className={`px-2 py-1 text-xs font-semibold rounded-full ${styles[status] || "text-gray-800 bg-gray-300"}`}>{status.replace('_', ' ')}</span>;
     };
 
     if (loading) return <Loader2 className="animate-spin text-cyan-400" size={48} />;
 
     return (
-        <div className="w-full max-w-4xl p-6">
-            <div className="flex justify-between items-center mb-6">
-                <h1 className="text-3xl font-bold text-cyan-300">HRD Case Dashboard</h1>
-                <button onClick={onNewCase} className="flex items-center bg-cyan-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-cyan-500 transition-colors">
-                    <PlusCircle className="mr-2" size={20}/> New Case
-                </button>
-            </div>
-            <div className="bg-gray-800/50 rounded-lg shadow-md border border-gray-700/50">
-                <ul className="divide-y divide-gray-700">
-                    {cases.map(c => (
-                        <li key={c.id} onClick={() => onCaseSelect(c.id)} className="p-4 hover:bg-gray-700/50 cursor-pointer flex justify-between items-center">
-                            <div><p className="text-lg font-semibold text-white">{c.caseTitle}</p><p className="text-sm text-gray-400">ID: {c.caseId}</p></div>
-                            {getStatusChip(c.status)}
-                        </li>
-                    ))}
-                    {cases.length === 0 && <p className="p-4 text-gray-500">No cases assigned to you.</p>}
-                </ul>
-            </div>
+        <div className="bg-gray-800/50 rounded-lg shadow-md border border-gray-700/50">
+            <ul className="divide-y divide-gray-700">
+                {cases.map(c => (
+                    <li key={c.id} onClick={() => onCaseSelect(c.id)} className="p-4 hover:bg-gray-700/50 cursor-pointer flex justify-between items-center">
+                        <div><p className="text-lg font-semibold text-white">{c.caseTitle}</p><p className="text-sm text-gray-400">ID: {c.caseId}</p></div>
+                        {getStatusChip(c.status)}
+                    </li>
+                ))}
+                {cases.length === 0 && <p className="p-4 text-gray-500">No active cases assigned to you.</p>}
+            </ul>
+        </div>
+    );
+};
+
+const CaseVault = ({ onCaseSelect }) => {
+    const { db, user, isAuthReady } = useFirebase();
+    const [cases, setCases] = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        if (!isAuthReady || !user || !db) return;
+        const q = query(collection(db, CONSTANTS.COLLECTIONS.CASES), where('assignedToUid', '==', user.uid), where('status', '==', 'closed'));
+        const unsubscribe = onSnapshot(q, (snap) => {
+            const caseData = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            caseData.sort((a, b) => (b.lastUpdatedAt?.seconds || 0) - (a.lastUpdatedAt?.seconds || 0));
+            setCases(caseData);
+            setLoading(false);
+        }, err => {
+            console.error(err);
+            setLoading(false);
+        });
+        return () => unsubscribe();
+    }, [isAuthReady, user, db]);
+
+    if (loading) return <Loader2 className="animate-spin text-cyan-400" size={48} />;
+
+    return (
+        <div className="bg-gray-800/50 rounded-lg shadow-md border border-gray-700/50">
+            <ul className="divide-y divide-gray-700">
+                {cases.map(c => (
+                    <li key={c.id} onClick={() => onCaseSelect(c.id)} className="p-4 hover:bg-gray-700/50 cursor-pointer flex justify-between items-center">
+                        <div><p className="text-lg font-semibold text-white">{c.caseTitle}</p><p className="text-sm text-gray-400">ID: {c.caseId}</p></div>
+                        <span className="px-2 py-1 text-xs font-semibold rounded-full text-gray-800 bg-gray-300">Closed</span>
+                    </li>
+                ))}
+                {cases.length === 0 && <p className="p-4 text-gray-500">The case vault is empty.</p>}
+            </ul>
         </div>
     );
 };
@@ -1610,6 +1701,7 @@ const CaseView = ({ caseId, onBack }) => {
                 <TabButton view="details" label="Details" icon={Info} />
                 <TabButton view="evidence" label="Evidence Locker" icon={Lock} />
                 <TabButton view="audit" label="Audit Trail" icon={Shield} />
+                <TabButton view="notes" label="Field Notes" icon={File} />
                 <TabButton view="tasks" label="Action Items" icon={ListTodo} />
                 <TabButton view="chat" label="Secure Chat" icon={MessageSquare} />
             </div>
@@ -1617,6 +1709,7 @@ const CaseView = ({ caseId, onBack }) => {
                 {activeTab === 'details' && <CaseDetails caseData={caseData} />}
                 {activeTab === 'evidence' && <EvidenceLocker caseId={caseId} />}
                 {activeTab === 'audit' && <EvidenceAuditTrail caseId={caseId} />}
+                {activeTab === 'notes' && <CaseFieldNotes caseId={caseId} />}
                 {activeTab === 'tasks' && <CaseTasks caseId={caseId} />}
                 {activeTab === 'chat' && <CaseChat caseId={caseId} />}
             </div>
@@ -1656,6 +1749,9 @@ const EvidenceLocker = ({ caseId }) => {
     const { db, storage, user } = useFirebase();
     const [evidence, setEvidence] = useState([]);
     const [uploading, setUploading] = useState(false);
+    const [showTranscriptionModal, setShowTranscriptionModal] = useState(false);
+    const [transcription, setTranscription] = useState('');
+    const [isTranscribing, setIsTranscribing] = useState(false);
 
     useEffect(() => {
         const q = query(collection(db, `cases/${caseId}/evidence`), orderBy('uploadedAt', 'desc'));
@@ -1682,29 +1778,66 @@ const EvidenceLocker = ({ caseId }) => {
         setUploading(false);
     };
 
+    const handleTranscribe = async (fileName) => {
+        setShowTranscriptionModal(true);
+        setIsTranscribing(true);
+        try {
+            const prompt = `This is a mock transcription for the audio file "${fileName}". Generate a plausible-sounding but fictional transcription of a conversation between two speakers, "Speaker A" and "Speaker B", discussing a sensitive event. Include a brief translation into Spanish.`;
+            const result = await callGeminiAPI(prompt);
+            setTranscription(result);
+        } catch (err) {
+            setTranscription("Failed to generate transcription.");
+        }
+        setIsTranscribing(false);
+    };
+
     return (
-        <div>
-            <div className="flex justify-between items-center mb-4">
-                <h3 className="text-xl font-bold text-gray-300">Evidence Files</h3>
-                <label className="flex items-center gap-2 bg-cyan-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-cyan-500 cursor-pointer">
-                    {uploading ? <Loader2 className="animate-spin" /> : <UploadCloud />}
-                    <span>{uploading ? 'Uploading...' : "Upload File"}</span>
-                    <input type="file" hidden onChange={handleFileUpload} disabled={uploading} />
-                </label>
+        <>
+            <div>
+                <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-xl font-bold text-gray-300">Evidence Files</h3>
+                    <label className="flex items-center gap-2 bg-cyan-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-cyan-500 cursor-pointer">
+                        {uploading ? <Loader2 className="animate-spin" /> : <UploadCloud />}
+                        <span>{uploading ? 'Uploading...' : "Upload File"}</span>
+                        <input type="file" hidden onChange={handleFileUpload} disabled={uploading} />
+                    </label>
+                </div>
+                <ul className="space-y-3">
+                    {evidence.map(item => (
+                        <li key={item.id} className="bg-gray-900/50 p-3 rounded-lg flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <File className="text-cyan-400" />
+                                <a href={item.url} target="_blank" rel="noopener noreferrer" className="text-white hover:underline">{item.fileName}</a>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                {item.fileType?.startsWith('audio/') && (
+                                    <button onClick={() => handleTranscribe(item.fileName)} className="text-xs flex items-center gap-1 text-purple-400 hover:text-purple-300">
+                                        <Mic size={14} /> Transcribe
+                                    </button>
+                                )}
+                                <span className="text-xs text-gray-500">{item.uploadedAt?.toDate().toLocaleDateString()}</span>
+                            </div>
+                        </li>
+                    ))}
+                    {evidence.length === 0 && <p className="text-gray-500 text-center py-4">No evidence uploaded.</p>}
+                </ul>
             </div>
-            <ul className="space-y-3">
-                {evidence.map(item => (
-                    <li key={item.id} className="bg-gray-900/50 p-3 rounded-lg flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                            <File className="text-cyan-400" />
-                            <a href={item.url} target="_blank" rel="noopener noreferrer" className="text-white hover:underline">{item.fileName}</a>
+            {showTranscriptionModal && (
+                <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 animate-fade-in">
+                    <div className="bg-gray-800 rounded-lg shadow-2xl p-8 max-w-2xl w-full mx-4 border border-purple-500/50">
+                        <div className="flex items-center justify-between mb-4">
+                            <h2 className="text-2xl font-bold text-purple-300 flex items-center gap-2"><Languages size={24}/> AI Transcription & Translation</h2>
+                            <button onClick={() => setShowTranscriptionModal(false)} className="p-1 rounded-full hover:bg-gray-700"><X /></button>
                         </div>
-                        <span className="text-xs text-gray-500">{item.uploadedAt?.toDate().toLocaleDateString()}</span>
-                    </li>
-                ))}
-                {evidence.length === 0 && <p className="text-gray-500 text-center py-4">No evidence uploaded.</p>}
-            </ul>
-        </div>
+                        {isTranscribing ? (
+                            <div className="flex justify-center items-center h-48"><Loader2 className="animate-spin text-purple-400" size={48} /></div>
+                        ) : (
+                            <div className="text-gray-300 whitespace-pre-wrap prose prose-invert max-w-none">{transcription}</div>
+                        )}
+                    </div>
+                </div>
+            )}
+        </>
     );
 };
 
