@@ -32,15 +32,7 @@ import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from 'fire
 // In a real React project, these would be in a `.env.local` file at the project root.
 // Example: REACT_APP_FIREBASE_API_KEY="your_key_here"
 // This file should be added to .gitignore to keep keys secure.
-const process_env = {
-    REACT_APP_FIREBASE_API_KEY: "AIzaSyAIcU46cd9mY6Q9rbvWK4KYWPWRqAGtbYg",
-    REACT_APP_FIREBASE_AUTH_DOMAIN: "chimtest-6854a.firebaseapp.com",
-    REACT_APP_FIREBASE_PROJECT_ID: "chimtest-6854a",
-    REACT_APP_FIREBASE_STORAGE_BUCKET: "chimtest-6854a.appspot.com",
-    REACT_APP_FIREBASE_MESSAGING_SENDER_ID: "178975469028",
-    REACT_APP_FIREBASE_APP_ID: "1:178975469028:web:fe72c902fb4b321a082bf1",
-    REACT_APP_GEMINI_API_KEY: "AIzaSyBBjQLkvOnOqKy9Zm5zdBPgnuv413nrDr8" // The Gemini key is handled by the environment
-};
+
 
 
 // --- App Constants ---
