@@ -31,16 +31,16 @@ import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from 'fire
 // --- Environment Variables Simulation ---
 // In a real React project, these would be in a `.env.local` file at the project root.
 // Example: REACT_APP_FIREBASE_API_KEY="your_key_here"
-// This file should be added to .gitignore to keep keys secure.
-// --- Firebase Configuration ---
-// This configuration now reads from the simulated environment variables.
-const firebaseConfig = {
-  apiKey: process_env.REACT_APP_FIREBASE_API_KEY,
-  authDomain: process_env.REACT_APP_FIREBASE_AUTH_DOMAIN,
-  projectId: process_env.REACT_APP_FIREBASE_PROJECT_ID,
-  storageBucket: process_env.REACT_APP_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process_env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process_env.REACT_APP_FIREBASE_APP_ID,
+// This file MUST be added to .gitignore to keep keys secure.
+// The values are left as empty strings here because they would be loaded from a secure, external file.
+const env_simulation = {
+    REACT_APP_FIREBASE_API_KEY: "",
+    REACT_APP_FIREBASE_AUTH_DOMAIN: "",
+    REACT_APP_FIREBASE_PROJECT_ID: "",
+    REACT_APP_FIREBASE_STORAGE_BUCKET: "",
+    REACT_APP_FIREBASE_MESSAGING_SENDER_ID: "",
+    REACT_APP_FIREBASE_APP_ID: "",
+    REACT_APP_GEMINI_API_KEY: "" // The Gemini key is handled by the environment
 };
 
 
@@ -88,14 +88,24 @@ const CONSTANTS = {
 };
 
 
-
+// --- Firebase Configuration ---
+// This configuration now reads from the simulated environment variables.
+// In a real Create React App, you would use `process.env.REACT_APP_...`
+const firebaseConfig = {
+  apiKey: env_simulation.REACT_APP_FIREBASE_API_KEY,
+  authDomain: env_simulation.REACT_APP_FIREBASE_AUTH_DOMAIN,
+  projectId: env_simulation.REACT_APP_FIREBASE_PROJECT_ID,
+  storageBucket: env_simulation.REACT_APP_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: env_simulation.REACT_APP_FIREBASE_MESSAGING_SENDER_ID,
+  appId: env_simulation.REACT_APP_FIREBASE_APP_ID,
+};
 
 
 // --- Gemini API Helper ---
 const callGeminiAPI = async (prompt, maxRetries = 3) => {
     // IMPORTANT: In a production environment, you should use a backend proxy to call the Gemini API. 
     // Exposing an API key on the client-side, even from environment variables, is a security risk.
-    const apiKey = process_env.REACT_APP_GEMINI_API_KEY; // This will be handled by the environment.
+    const apiKey = env_simulation.REACT_APP_GEMINI_API_KEY; // This will be handled by the environment.
     const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
     
     const payload = {
@@ -188,6 +198,12 @@ const FirebaseProvider = ({ children }) => {
 
     useEffect(() => {
         try {
+            // A real app should have a check here to ensure firebaseConfig values are present
+            if (!firebaseConfig.apiKey) {
+                console.error("Firebase config is missing. Make sure your .env.local file is set up correctly.");
+                setLoading(false);
+                return;
+            }
             const app = initializeApp(firebaseConfig);
             const authInstance = getAuth(app);
             const dbInstance = getFirestore(app);
