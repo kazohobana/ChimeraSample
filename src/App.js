@@ -40,7 +40,7 @@ const env_simulation = {
     REACT_APP_FIREBASE_STORAGE_BUCKET: "chimtest-6854a.firebasestorage.app"",
     REACT_APP_FIREBASE_MESSAGING_SENDER_ID: "178975469028",
     REACT_APP_FIREBASE_APP_ID: "1:178975469028:web:fe72c902fb4b321a082bf1",
-    REACT_APP_GEMINI_API_KEY: "" // The Gemini key is handled by the environment
+    REACT_APP_GEMINI_API_KEY: "AIzaSyBBjQLkvOnOqKy9Zm5zdBPgnuv413nrDr8" // The Gemini key is handled by the environment
 };
 
 
