@@ -1505,9 +1505,14 @@ const ActiveCases = ({ onCaseSelect }) => {
 
     useEffect(() => {
         if (!isAuthReady || !user || !db) return;
-        const q = query(collection(db, CONSTANTS.COLLECTIONS.CASES), where('assignedToUid', '==', user.uid), where('status', '!=', 'closed'));
+        // FIX: Removed complex query to avoid needing a composite index.
+        // We fetch all cases for the user and then filter client-side.
+        const q = query(collection(db, CONSTANTS.COLLECTIONS.CASES), where('assignedToUid', '==', user.uid));
         const unsubscribe = onSnapshot(q, (snap) => {
-            const caseData = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            const caseData = snap.docs
+                .map(doc => ({ id: doc.id, ...doc.data() }))
+                .filter(c => c.status !== 'closed'); // Filter client-side
+            
             caseData.sort((a, b) => (b.lastUpdatedAt?.seconds || 0) - (a.lastUpdatedAt?.seconds || 0));
             setCases(caseData);
             setLoading(false);
@@ -1550,6 +1555,7 @@ const CaseVault = ({ onCaseSelect }) => {
 
     useEffect(() => {
         if (!isAuthReady || !user || !db) return;
+        // FIX: Removed complex query to avoid needing a composite index.
         const q = query(collection(db, CONSTANTS.COLLECTIONS.CASES), where('assignedToUid', '==', user.uid), where('status', '==', 'closed'));
         const unsubscribe = onSnapshot(q, (snap) => {
             const caseData = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
