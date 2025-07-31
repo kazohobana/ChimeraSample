@@ -1487,29 +1487,57 @@ const ErrorModal = ({ error, onClose }) => {
             case 'auth/wrong-password': 
             case 'auth/invalid-credential':
                 message = 'Invalid Credentials.'; 
-                solution = 'Please check your email and password.'; 
+                solution = 'Please double-check your email and password. Ensure you are using the correct login method.'; 
                 break;
             case 'auth/invalid-email': 
                 message = 'Invalid Email Format.'; 
-                solution = 'Please enter a valid email address.'; 
+                solution = 'Please enter a valid email address (e.g., user@example.com).'; 
                 break;
             case 'auth/email-already-in-use': 
                 message = 'Email Already in Use.'; 
-                solution = 'An account with this email already exists.'; 
+                solution = 'An account with this email already exists. Please try logging in or use a different email address.'; 
                 break;
             case 'permission-denied': 
                 message = 'Permission Denied.'; 
-                solution = 'You do not have the necessary permissions for this action.'; 
+                solution = 'You do not have the necessary permissions for this action. This could be due to Firestore security rules. Check the console for more details.'; 
+                break;
+            case 'unavailable':
+                message = 'Service Unavailable';
+                solution = 'The Firebase service is currently unavailable. This is likely a temporary issue. Please try again in a few moments.';
                 break;
             default: 
                 message = err.message || message; 
                 break;
         }
-        return { message, solution };
+        return { title: message, solution, code: err.code };
     };
-    const { message, solution } = handleFirebaseError(error);
+    const { title, solution, code } = handleFirebaseError(error);
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 animate-fade-in"><div className="bg-gray-800 rounded-lg shadow-2xl p-8 max-w-md w-full mx-4 border border-red-500/50"><div className="flex items-center mb-4"><AlertTriangle className="text-red-500 text-3xl mr-4" /><h2 className="text-2xl font-bold text-red-300">An Error Occurred</h2></div><div className="text-gray-300 space-y-2"><p><strong className="font-semibold text-gray-200">Message:</strong> {message}</p><p><strong className="font-semibold text-gray-200">Solution:</strong> {solution}</p></div><button onClick={onClose} className="mt-6 w-full bg-red-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-opacity-50 transition-colors">Close</button></div></div>
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 animate-fade-in">
+            <div className="bg-gray-800 rounded-lg shadow-2xl p-8 max-w-md w-full mx-4 border border-red-500/50">
+                <div className="flex items-center mb-4">
+                    <AlertTriangle className="text-red-500 text-3xl mr-4" />
+                    <h2 className="text-2xl font-bold text-red-300">An Error Occurred</h2>
+                </div>
+                <div className="text-gray-300 space-y-4">
+                    <div>
+                        <strong className="font-semibold text-gray-200 block">Message:</strong>
+                        <p>{title}</p>
+                    </div>
+                    <div>
+                        <strong className="font-semibold text-gray-200 block">Solution:</strong>
+                        <p>{solution}</p>
+                    </div>
+                    {code && (
+                        <div>
+                            <strong className="font-semibold text-gray-200 block">Error Code:</strong>
+                            <p className="font-mono text-sm text-gray-400 bg-gray-900 px-2 py-1 rounded">{code}</p>
+                        </div>
+                    )}
+                </div>
+                <button onClick={onClose} className="mt-6 w-full bg-red-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-opacity-50 transition-colors">Close</button>
+            </div>
+        </div>
     );
 };
 
