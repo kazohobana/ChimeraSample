@@ -28,6 +28,20 @@ import {
 } from 'firebase/firestore';
 import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 
+// --- Environment Variables Simulation ---
+// In a real React project, these would be in a `.env.local` file at the project root.
+// Example: REACT_APP_FIREBASE_API_KEY="your_key_here"
+// This file should be added to .gitignore to keep keys secure.
+const process_env = {
+    REACT_APP_FIREBASE_API_KEY: "AIzaSyAIcU46cd9mY6Q9rbvWK4KYWPWRqAGtbYg",
+    REACT_APP_FIREBASE_AUTH_DOMAIN: "chimtest-6854a.firebaseapp.com",
+    REACT_APP_FIREBASE_PROJECT_ID: "chimtest-6854a",
+    REACT_APP_FIREBASE_STORAGE_BUCKET: "chimtest-6854a.appspot.com",
+    REACT_APP_FIREBASE_MESSAGING_SENDER_ID: "178975469028",
+    REACT_APP_FIREBASE_APP_ID: "1:178975469028:web:fe72c902fb4b321a082bf1",
+    REACT_APP_GEMINI_API_KEY: "AIzaSyBBjQLkvOnOqKy9Zm5zdBPgnuv413nrDr8" // The Gemini key is handled by the environment
+};
+
 
 // --- App Constants ---
 const CONSTANTS = {
@@ -74,15 +88,14 @@ const CONSTANTS = {
 
 
 // --- Firebase Configuration ---
-// IMPORTANT: In a real-world application, never commit API keys to a public repository.
-// Use environment variables (e.g., a .env file) for security.
+// This configuration now reads from the simulated environment variables.
 const firebaseConfig = {
-  apiKey: "AIzaSyAIcU46cd9mY6Q9rbvWK4KYWPWRqAGtbYg",
-  authDomain: "chimtest-6854a.firebaseapp.com",
-  projectId: "chimtest-6854a",
-  storageBucket: "chimtest-6854a.appspot.com",
-  messagingSenderId: "178975469028",
-  appId: "1:178975469028:web:fe72c902fb4b321a082bf1",
+  apiKey: process_env.REACT_APP_FIREBASE_API_KEY,
+  authDomain: process_env.REACT_APP_FIREBASE_AUTH_DOMAIN,
+  projectId: process_env.REACT_APP_FIREBASE_PROJECT_ID,
+  storageBucket: process_env.REACT_APP_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process_env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process_env.REACT_APP_FIREBASE_APP_ID,
 };
 
 
@@ -90,7 +103,7 @@ const firebaseConfig = {
 const callGeminiAPI = async (prompt, maxRetries = 3) => {
     // IMPORTANT: In a production environment, you should use a backend proxy to call the Gemini API. 
     // Exposing an API key on the client-side, even from environment variables, is a security risk.
-    const apiKey = ""; // This will be handled by the environment.
+    const apiKey = process_env.REACT_APP_GEMINI_API_KEY; // This will be handled by the environment.
     const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
     
     const payload = {
