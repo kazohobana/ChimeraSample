@@ -803,9 +803,13 @@ const ProjectManagement = ({ onNavigate }) => {
 
     useEffect(() => {
         if (!isAuthReady || !user || !db) return;
-        const q = query(collection(db, CONSTANTS.COLLECTIONS.PROJECTS), where('authorUid', '==', user.uid), orderBy('createdAt', 'desc'));
+        // FIX: Removed orderBy to prevent index error. Sorting is now done client-side.
+        const q = query(collection(db, CONSTANTS.COLLECTIONS.PROJECTS), where('authorUid', '==', user.uid));
         const unsubscribe = onSnapshot(q, snap => {
-            setProjects(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+            const projectData = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            // Sort client-side by creation date
+            projectData.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+            setProjects(projectData);
             setLoading(false);
         }, err => {
             console.error(err);
@@ -871,21 +875,11 @@ const ArticleManagement = ({ onNewArticle, onArticleSelect }) => {
             setLoading(false);
         });
 
-        // --- IMPORTANT ---
-        // This query fetches articles for community review.
-        // It specifically requests documents where the status is 'pending_approval' AND the author is NOT the current user.
-        // This query WILL FAIL with a "Missing or insufficient permissions" error if your
-        // Firestore Security Rules do not explicitly allow a user to perform a query
-        // that filters on one field ('status') and uses an inequality on another ('authorUid').
-        // Ensure your rules allow authenticated journalists to read all 'pending_approval' documents.
         const pendingQuery = query(
             collection(db, CONSTANTS.COLLECTIONS.ARTICLES), 
             where('status', '==', 'pending_approval')
         );
         const unsubPending = onSnapshot(pendingQuery, (snap) => {
-            // We filter client-side because a query with `where('authorUid', '!=', user.uid)` can be complex
-            // and often requires a composite index, which can't be created from the app.
-            // The security rules MUST allow reading all pending articles for this to work.
             const filteredArticles = snap.docs
                 .map(doc => ({ id: doc.id, ...doc.data() }))
                 .filter(art => art.authorUid !== user.uid);
@@ -1170,9 +1164,13 @@ const ConversationManager = () => {
 
     useEffect(() => {
         if(!user || !db) return;
-        const q = query(collection(db, CONSTANTS.COLLECTIONS.CONVERSATIONS), where('journalistUid', '==', user.uid), orderBy('createdAt', 'desc'));
+        // FIX: Removed orderBy to prevent index error. Sorting is now done client-side.
+        const q = query(collection(db, CONSTANTS.COLLECTIONS.CONVERSATIONS), where('journalistUid', '==', user.uid));
         const unsubscribe = onSnapshot(q, (snap) => {
-            setConversations(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+            const convoData = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            // Sort client-side by creation date
+            convoData.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+            setConversations(convoData);
             setLoading(false);
         });
         return () => unsubscribe();
